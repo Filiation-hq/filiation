@@ -1,0 +1,23 @@
+name: PR template
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  check-pr-body:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Validate PR body against .github/pull_request_template.md
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python .github/scripts/check_pr_body.py
