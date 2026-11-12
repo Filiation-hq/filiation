@@ -45,6 +45,7 @@ def make_manifest(**overrides) -> RunManifest:
             SourceSnapshot(
                 source="510k",
                 export_date="2026-11-09",
+                last_updated="2026-11-09",
                 status="unchanged",
                 objects=[
                     ManifestObject(
@@ -118,8 +119,8 @@ def test_manifest_object_rejects_invalid_hash_size_or_count(kwargs):
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{"status": "skipped"}, {"export_date": "2026-13-01"}],
-    ids=["unknown-status", "invalid-export-date"],
+    [{"status": "skipped"}, {"export_date": "2026-13-01"}, {"last_updated": "yesterday"}],
+    ids=["unknown-status", "invalid-export-date", "invalid-last-updated"],
 )
 def test_source_snapshot_rejects_unknown_status_or_bad_export_date(kwargs):
     # Sample: status "skipped" (only stored/unchanged exist) and month 13.

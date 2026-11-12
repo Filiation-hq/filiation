@@ -76,6 +76,7 @@ def test_run_ingestion_writes_manifest_listing_every_stored_object(tmp_path):
     [obj] = snapshot.objects
     assert (manifest.run_id, manifest.commit_sha, manifest.writer) == ("2026-11-16_101", COMMIT, "github-actions")
     assert (snapshot.source, snapshot.export_date, snapshot.status) == ("510k", "2026-11-09", "stored")
+    assert snapshot.last_updated == "2026-11-09"
     assert (obj.key, obj.records) == (KEY, 3)
     assert obj.sha256 == hashlib.sha256(fixture_export_zip()).hexdigest()
     assert (manifest.started_at, manifest.finished_at) == ("2026-11-16T06:00:04Z", "2026-11-16T06:01:10Z")

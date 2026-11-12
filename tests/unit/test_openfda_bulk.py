@@ -35,6 +35,7 @@ from stemma.pipeline.crawler.openfda_bulk import (
     count_export_records,
     ingest_export,
     parse_export_listing,
+    read_export_stats,
 )
 
 
@@ -140,3 +141,18 @@ def test_ingest_export_raises_conflict_when_same_export_date_has_different_bytes
         ingest_export("510k", store, opener=opener_for(edited))
     assert (tmp_path / "raw" / KEY).read_bytes() == fixture_export_zip()
 
+
+
+def test_read_export_stats_returns_count_and_openfda_last_updated(tmp_path):
+    # Sample: the 3-record fixture, whose meta.last_updated is 2026-11-09. ADR-008 logs
+    # last_updated on every run to measure openFDA's real refresh cadence.
+    path = tmp_path / "export.zip"
+    path.write_bytes(fixture_export_zip())
+    stats = read_export_stats(path)
+    assert (stats.records, stats.last_updated) == (3, "2026-11-09")
+
+
+def test_ingest_export_reports_last_updated_per_partition(tmp_path):
+    # Sample: fixture index + 3-record zip. The partition result carries meta.last_updated.
+    result = ingest_export("510k", LocalRawStore(tmp_path), opener=opener_for(fixture_export_zip()))
+    assert result.partitions[0].last_updated == "2026-11-09"
