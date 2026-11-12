@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict
+import os
+import subprocess
+import time
 from pathlib import Path
 
 import click
@@ -14,7 +16,8 @@ from stemma.core.schemas.device_nodes import DeviceNode
 from stemma.core.storage.raw_store import raw_store_from_env
 from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
 from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler
-from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener, ingest_export
+from stemma.pipeline.crawler.ingestion_run import run_ingestion
+from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener
 from stemma.pipeline.crawler.openfda_client import OpenFDAClient
 from stemma.pipeline.crawler.sampler import PilotSampler
 from stemma.pipeline.extraction.parser import SummaryParser
@@ -55,14 +58,55 @@ def fetch_openfda(limit: int, recalls: bool, output: str | None) -> None:
     logger.info("Saved %d records to %s", len(data), out_path)
 
 
+def _head_commit() -> str:
+    """Returns the SHA of the checked-out commit.
+
+    Returns:
+        str: Full 40-character SHA from `git rev-parse HEAD`.
+
+    Raises:
+        click.UsageError: If git is unavailable or this is not a repository.
+    """
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise click.UsageError("Pass --commit-sha; git rev-parse HEAD failed") from exc
+
+
 @cli.command("ingest-openfda")
 @click.option(
-    "--source", type=click.Choice(sorted(SOURCES)), required=True, help="openFDA export to ingest"
+    "--source",
+    "sources",
+    type=click.Choice(sorted(SOURCES)),
+    multiple=True,
+    default=sorted(SOURCES),
+    show_default=True,
+    help="openFDA export(s) to ingest; repeat for several",
 )
-def ingest_openfda(source: str) -> None:
-    """Stores the current openFDA bulk export write-once in the raw store set by STEMMA_RAW_STORE."""
-    result = ingest_export(source, raw_store_from_env(), opener=default_opener)
-    click.echo(json.dumps(asdict(result), indent=2))
+@click.option("--run-id", envvar="GITHUB_RUN_ID", default=None, help="Run id suffix [env: GITHUB_RUN_ID]")
+@click.option("--commit-sha", envvar="GITHUB_SHA", default=None, help="Code commit [env: GITHUB_SHA]")
+@click.option(
+    "--writer",
+    type=click.Choice(["github-actions", "oracle-vm", "local"]),
+    default=None,
+    help="Who is writing; defaults to github-actions under Actions, else local",
+)
+def ingest_openfda(
+    sources: tuple[str, ...], run_id: str | None, commit_sha: str | None, writer: str | None
+) -> None:
+    """Stores the current openFDA exports write-once and records the run in a manifest."""
+    in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
+    manifest = run_ingestion(
+        list(sources),
+        raw_store_from_env(),
+        run_suffix=run_id or f"local-{int(time.time())}",
+        commit_sha=commit_sha or _head_commit(),
+        writer=writer or ("github-actions" if in_actions else "local"),
+        opener=default_opener,
+    )
+    click.echo(manifest.to_json().decode("utf-8"))
 
 
 @cli.command("sample-pilot")
