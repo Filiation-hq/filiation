@@ -12,9 +12,11 @@ stemma/
 ├── .github/                      # GitHub config & CI
 │   ├── pull_request_template.md  # Mandatory PR body format (AGENTS.md §8)
 │   ├── scripts/
-│   │   └── check_pr_body.py      # Validates PR bodies against the template
+│   │   ├── check_pr_body.py      # Validates PR bodies against the template
+│   │   └── ingest_summary.py     # Renders the weekly ingestion job summary from the run manifest
 │   └── workflows/
 │       ├── ci.yml                # CI: make test + make lint on every PR
+│       ├── ingest.yml            # Weekly openFDA ingestion to R2 (Wed 07:00 UTC + manual), `ingestion` env (ADR-008/010)
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
 │
 ├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout; raw/ mirrors the stemma-raw R2 bucket keys (ADR-010)
