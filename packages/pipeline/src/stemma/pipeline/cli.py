@@ -11,6 +11,7 @@ import click
 import pandas as pd
 
 from stemma.core.data_loader import StemmaDataLoader
+from stemma.core.schemas.device_nodes import DeviceNode
 from stemma.core.schemas.predicate_edges import PredicateEdge
 from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
 from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler
