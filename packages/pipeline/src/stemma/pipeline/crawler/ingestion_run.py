@@ -45,12 +45,18 @@ def _snapshot(result: ExportResult) -> SourceSnapshot:
         result: Outcome of ingest_export for one source.
 
     Returns:
-        SourceSnapshot: "stored" if any partition was newly written, else "unchanged".
+        SourceSnapshot: "stored" if any partition was newly written, else "unchanged", with the
+            newest meta.last_updated across partitions.
     """
     objects = [ManifestObject(p.key, p.sha256, p.size_bytes, p.records) for p in result.partitions]
     status = "stored" if any(p.status == "stored" for p in result.partitions) else "unchanged"
+    dates = [p.last_updated for p in result.partitions if p.last_updated]
     return SourceSnapshot(
-        source=result.source, status=status, objects=objects, export_date=result.export_date
+        source=result.source,
+        status=status,
+        objects=objects,
+        export_date=result.export_date,
+        last_updated=max(dates) if dates else None,
     )
 
 
