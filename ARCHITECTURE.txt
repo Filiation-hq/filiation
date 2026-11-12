@@ -28,7 +28,7 @@ stemma/
 │   │   │   └── data_loader.py    # `stemma fetch-data` CLI entrypoint for modelers
 │   │   └── pyproject.toml
 │   │
-│   ├── pipeline/                 # Data Engineering (Tesseract OCR, pdfplumber, LLM parsers)
+│   ├── pipeline/                 # Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
 │   │   ├── src/stemma/pipeline/
 │   │   │   ├── crawler/          # FDA CDRH scraping engine & openFDA sync
 │   │   │   ├── ocr/              # Tesseract OCR engine for pre-2003 scanned PDFs
