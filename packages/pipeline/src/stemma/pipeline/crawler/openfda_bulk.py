@@ -59,6 +59,15 @@ class PartitionResult:
     size_bytes: int
     records: int
     status: str
+    last_updated: str | None = None
+
+
+@dataclass(frozen=True)
+class ExportStats:
+    """What a streamed export reports about itself: its record count and meta.last_updated."""
+
+    records: int
+    last_updated: str | None
 
 
 @dataclass(frozen=True)
@@ -195,19 +204,20 @@ class _JsonStream:
                     raise ExportIntegrityError(f"Malformed export JSON: {exc}") from exc
 
 
-def _count_results(stream: _JsonStream) -> int:
-    """Counts the elements of the top-level "results" array, decoding one record at a time.
+def _count_results(stream: _JsonStream) -> ExportStats:
+    """Counts the top-level "results" array one record at a time and reads meta.last_updated.
 
     Args:
         stream: Stream positioned at the start of an openFDA export document.
 
     Returns:
-        int: Number of records in "results".
+        ExportStats: Number of records in "results" and meta.last_updated, if present.
 
     Raises:
         ExportIntegrityError: If the document is malformed or has no top-level "results".
     """
     count = None
+    last_updated = None
     stream.expect("{")
     while stream.peek() != "}":
         key = stream.value()
@@ -221,13 +231,36 @@ def _count_results(stream: _JsonStream) -> int:
                 if stream.peek() == ",":
                     stream.expect(",")
             stream.expect("]")
+        elif key == "meta":
+            meta = stream.value()
+            last_updated = meta.get("last_updated") if isinstance(meta, dict) else None
         else:
             stream.value()
         if stream.peek() == ",":
             stream.expect(",")
     if count is None:
         raise ExportIntegrityError("Export JSON has no top-level 'results' array")
-    return count
+    return ExportStats(count, last_updated)
+
+
+def read_export_stats(zip_path: Path) -> ExportStats:
+    """Streams an openFDA export zip to count its records and read meta.last_updated.
+
+    Args:
+        zip_path: Path to a partition zip holding exactly one JSON file.
+
+    Returns:
+        ExportStats: Record count and meta.last_updated.
+
+    Raises:
+        ExportIntegrityError: If the zip does not hold exactly one entry or its JSON is malformed.
+    """
+    with zipfile.ZipFile(zip_path) as archive:
+        names = archive.namelist()
+        if len(names) != 1:
+            raise ExportIntegrityError(f"Expected one file in {zip_path.name}, found {names}")
+        with archive.open(names[0]) as raw:
+            return _count_results(_JsonStream(io.TextIOWrapper(raw, encoding="utf-8")))
 
 
 def count_export_records(zip_path: Path) -> int:
@@ -242,12 +275,7 @@ def count_export_records(zip_path: Path) -> int:
     Raises:
         ExportIntegrityError: If the zip does not hold exactly one entry or its JSON is malformed.
     """
-    with zipfile.ZipFile(zip_path) as archive:
-        names = archive.namelist()
-        if len(names) != 1:
-            raise ExportIntegrityError(f"Expected one file in {zip_path.name}, found {names}")
-        with archive.open(names[0]) as raw:
-            return _count_results(_JsonStream(io.TextIOWrapper(raw, encoding="utf-8")))
+    return read_export_stats(zip_path).records
 
 
 def _download(url: str, dest: Path, opener: Opener) -> tuple[str, int]:
@@ -318,14 +346,15 @@ def ingest_export(
         for partition in listing.partitions:
             path = Path(tmp) / partition.file_name
             sha256, size = _download(partition.url, path, opener)
-            records = count_export_records(path)
+            stats = read_export_stats(path)
+            records = stats.records
             if records != partition.records:
                 raise ExportIntegrityError(
                     f"{partition.file_name}: index lists {partition.records} records, zip holds {records}"
                 )
-            downloads.append((partition, path, sha256, size, records))
+            downloads.append((partition, path, sha256, size, records, stats.last_updated))
 
-        for partition, path, sha256, size, records in downloads:
+        for partition, path, sha256, size, records, last_updated in downloads:
             key = f"openfda/{source}/export_date={listing.export_date}/{partition.file_name}"
             if store.exists(key):
                 stored_sha = _sha256_file(store.get(key, Path(tmp) / f"stored-{partition.file_name}"))
@@ -337,6 +366,6 @@ def ingest_export(
             else:
                 store.put_once(key, path)
                 status = "stored"
-            results.append(PartitionResult(key, sha256, size, records, status))
+            results.append(PartitionResult(key, sha256, size, records, status, last_updated))
 
     return ExportResult(source=source, export_date=listing.export_date, partitions=results)
