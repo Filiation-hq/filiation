@@ -17,7 +17,7 @@ stemma/
 │       ├── ci.yml                # CI: make test + make lint on every PR
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
 │
-├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout, created on demand
+├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout; raw/ mirrors the stemma-raw R2 bucket keys (ADR-010)
 │   ├── raw/                      # [GIT-IGNORED] Raw 510(k) PDFs & openFDA JSON
 │   ├── interim/                  # [GIT-IGNORED] Extracted OCR text & candidate regex matches
 │   └── derived/                  # Parquet/CSV edge lists & release datasets (<100 MB may be committed)
@@ -62,4 +62,4 @@ stemma/
 └── docs/
     ├── ROADMAP.md                # Maturity stages 0–4 with exit criteria; one milestone per stage (ADR-009)
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-009)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-010)
