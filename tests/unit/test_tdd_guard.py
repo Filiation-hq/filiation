@@ -275,6 +275,32 @@ def test_static_scan_flags_tests_that_cannot_fail(name):
     assert static_subjects_for(name) == [f"t.py::{name}"]
 
 
+def test_static_scan_ignores_skip_or_xfail_words_inside_parametrize_values():
+    # Sample: a parametrize decorator whose ids are "test_skipped" and "test_xfailed".
+    # Only an actual skip/xfail marker or call disables a test; words in data don't.
+    sample = src(
+        """
+        import pytest
+
+        @pytest.mark.parametrize("name", ["test_skipped", "test_xfailed"])
+        def test_param(name):
+            assert name.startswith("test_")
+        """
+    )
+    assert load_guard().static_violations({"t.py": sample}, {"t.py::test_param"}) == []
+
+
+@pytest.mark.parametrize(
+    "decorator",
+    ["@pytest.mark.skipif(True, reason='x')", "@unittest.skip('x')", "@mark.xfail(strict=False)"],
+    ids=["skipif", "unittest-skip", "bare-mark-xfail"],
+)
+def test_static_scan_flags_skip_markers_in_any_spelling(decorator):
+    # Sample: skip/xfail markers written as skipif, unittest.skip, and an imported mark.
+    sample = f"{decorator}\ndef test_x():\n    assert compute() == 1\n"
+    assert subjects(load_guard().static_violations({"t.py": sample}, {"t.py::test_x"})) == ["t.py::test_x"]
+
+
 def test_static_scan_only_checks_targeted_tests():
     # Sample: STATIC_SAMPLE scanned for test_plain_assert only. The bad tests in the same
     # file are pre-existing, so they are out of scope for this PR.
