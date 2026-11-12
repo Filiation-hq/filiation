@@ -86,6 +86,12 @@ def _head_commit() -> str:
     help="openFDA export(s) to ingest; repeat for several",
 )
 @click.option("--run-id", envvar="GITHUB_RUN_ID", default=None, help="Run id suffix [env: GITHUB_RUN_ID]")
+@click.option(
+    "--run-attempt",
+    envvar="GITHUB_RUN_ATTEMPT",
+    default=None,
+    help="Re-run attempt, appended to the run id [env: GITHUB_RUN_ATTEMPT]",
+)
 @click.option("--commit-sha", envvar="GITHUB_SHA", default=None, help="Code commit [env: GITHUB_SHA]")
 @click.option(
     "--writer",
@@ -94,14 +100,20 @@ def _head_commit() -> str:
     help="Who is writing; defaults to github-actions under Actions, else local",
 )
 def ingest_openfda(
-    sources: tuple[str, ...], run_id: str | None, commit_sha: str | None, writer: str | None
+    sources: tuple[str, ...],
+    run_id: str | None,
+    run_attempt: str | None,
+    commit_sha: str | None,
+    writer: str | None,
 ) -> None:
     """Stores the current openFDA exports write-once and records the run in a manifest."""
     in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
+    # GitHub keeps GITHUB_RUN_ID on "Re-run jobs"; the attempt keeps manifest keys unique.
+    suffix = f"{run_id}-{run_attempt}" if run_id and run_attempt else run_id
     manifest = run_ingestion(
         list(sources),
         raw_store_from_env(),
-        run_suffix=run_id or f"local-{int(time.time())}",
+        run_suffix=suffix or f"local-{int(time.time())}",
         commit_sha=commit_sha or _head_commit(),
         writer=writer or ("github-actions" if in_actions else "local"),
         opener=default_opener,

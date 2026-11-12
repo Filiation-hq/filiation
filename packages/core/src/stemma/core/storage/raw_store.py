@@ -6,8 +6,9 @@ import hashlib
 import os
 import shutil
 import tempfile
+import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -252,15 +253,19 @@ def _error_status(exc: Exception) -> tuple[str, int]:
 class R2RawStore(RawStore):
     """RawStore backed by a Cloudflare R2 bucket through the S3 API (boto3)."""
 
-    def __init__(self, bucket: str, client: Any) -> None:
+    def __init__(
+        self, bucket: str, client: Any, new_write_id: Callable[[], str] = lambda: uuid.uuid4().hex
+    ) -> None:
         """Creates a store over an existing S3-compatible client.
 
         Args:
             bucket: Bucket name, normally "stemma-raw".
             client: boto3 S3 client configured with the R2 endpoint.
+            new_write_id: Returns a unique id per put_once call; injectable for tests.
         """
         self.bucket = bucket
         self.client = client
+        self.new_write_id = new_write_id
 
     def put_once(self, key: str, data: bytes | Path) -> str:
         """Stores data under key with If-None-Match: *, so R2 refuses an existing key.
@@ -273,7 +278,7 @@ class R2RawStore(RawStore):
             str: Hex SHA-256 of the stored bytes, also saved as object metadata.
 
         Raises:
-            KeyExistsError: If R2 answers 412 PreconditionFailed.
+            KeyExistsError: If R2 answers 412 and the stored object came from another write.
             InvalidKeyError: If key is malformed.
             botocore.exceptions.ClientError: For any other S3 error.
         """
@@ -281,19 +286,24 @@ class R2RawStore(RawStore):
 
         payload = _read_payload(data)
         digest = hashlib.sha256(payload).hexdigest()
+        write_id = self.new_write_id()
         try:
             self.client.put_object(
                 Bucket=self.bucket,
                 Key=validate_key(key),
                 Body=payload,
                 IfNoneMatch="*",
-                Metadata={"sha256": digest},
+                Metadata={"sha256": digest, "write-id": write_id},
             )
         except ClientError as exc:
             code, status = _error_status(exc)
-            if code == "PreconditionFailed" or status == 412:
+            if code != "PreconditionFailed" and status != 412:
+                raise
+            # A timed-out attempt can commit and then lose its response; boto3's retry then
+            # gets 412 for our own object (Cloudflare R2 conditional-operations docs).
+            stored = self.client.head_object(Bucket=self.bucket, Key=key).get("Metadata", {})
+            if stored.get("write-id") != write_id:
                 raise KeyExistsError(key) from exc
-            raise
         return digest
 
     def write_latest(self, data: bytes) -> None:

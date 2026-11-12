@@ -58,14 +58,15 @@ def put_params(body=ANY) -> dict:
         body: Expected Body argument; ANY by default.
 
     Returns:
-        dict: Expected params, including the If-None-Match write-once guard.
+        dict: Expected params, including the If-None-Match write-once guard and the
+            per-call write id that tells our own retried write apart from someone else's.
     """
     return {
         "Bucket": BUCKET,
         "Key": KEY,
         "Body": body,
         "IfNoneMatch": "*",
-        "Metadata": {"sha256": PAYLOAD_SHA},
+        "Metadata": {"sha256": PAYLOAD_SHA, "write-id": ANY},
     }
 
 
@@ -98,6 +99,11 @@ def r2_store_written_twice(tmp_path: Path):
         service_error_code="PreconditionFailed",
         http_status_code=412,
         expected_params=put_params(),
+    )
+    stubber.add_response(
+        "head_object",
+        {"Metadata": {"sha256": PAYLOAD_SHA, "write-id": "an-earlier-run"}},
+        {"Bucket": BUCKET, "Key": KEY},
     )
     stubber.activate()
     return R2RawStore(BUCKET, client), stubber.assert_no_pending_responses
@@ -286,3 +292,43 @@ def test_r2_write_latest_puts_pointer_without_if_none_match():
             {"Bucket": BUCKET, "Key": LATEST_KEY, "Body": b'{"run_id": "102"}', "ContentType": "application/json"},
         )
         R2RawStore(BUCKET, client).write_latest(b'{"run_id": "102"}')
+        stubber.assert_no_pending_responses()
+
+
+def r2_conflict_store(stored_write_id: str) -> tuple:
+    """Builds an R2RawStore whose put gets 412 and whose stored object carries stored_write_id.
+
+    Args:
+        stored_write_id: write-id metadata on the object already at KEY.
+
+    Returns:
+        tuple: (store using write id "w-this-call", stubber).
+    """
+    client = make_r2_client()
+    stubber = Stubber(client)
+    stubber.add_client_error(
+        "put_object", service_error_code="PreconditionFailed", http_status_code=412, expected_params=put_params()
+    )
+    stubber.add_response(
+        "head_object",
+        {"Metadata": {"sha256": PAYLOAD_SHA, "write-id": stored_write_id}},
+        {"Bucket": BUCKET, "Key": KEY},
+    )
+    stubber.activate()
+    return R2RawStore(BUCKET, client, new_write_id=lambda: "w-this-call"), stubber
+
+
+def test_r2_put_once_treats_412_on_its_own_retried_write_as_success():
+    # Sample: a 290 MB upload whose response is lost to a timeout, so boto3 retries and R2
+    # answers 412. The stored object carries this call's write id, so the first attempt
+    # did commit. Cloudflare documents this case; it must not fail the run.
+    store, stubber = r2_conflict_store("w-this-call")
+    assert store.put_once(KEY, PAYLOAD) == PAYLOAD_SHA
+    stubber.assert_no_pending_responses()
+
+
+def test_r2_put_once_raises_when_412_object_came_from_another_write():
+    # Sample: 412 on a key whose object was written by an earlier run (different write id).
+    store, _ = r2_conflict_store("an-earlier-run")
+    with pytest.raises(KeyExistsError):
+        store.put_once(KEY, PAYLOAD)

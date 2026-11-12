@@ -54,6 +54,7 @@ latest.json
 - Writing to a key that already exists is refused, and a test enforces this.
 - `latest.json` is the only mutable object. It is updated only after the run's manifest is written, so a failed run never moves it.
 - R2 enforces this too: `R2RawStore.put_once` sends `If-None-Match: *`, and R2 evaluates it atomically, answering 412 PreconditionFailed if the key exists. Verified 2026-11-12 against Cloudflare's [conditional operations docs](https://developers.cloudflare.com/r2/api/s3/conditional-operations/).
+- Each upload carries a unique `write-id` in its metadata. When a timed-out upload commits and boto3's retry then gets 412, `put_once` reads the stored `write-id`; if it matches, the first attempt succeeded and the run continues. This is the pattern Cloudflare's docs recommend.
 
 **Retention.** Keep every export, PDF version, and manifest. Review when the bucket passes 100 GB or monthly cost passes the budget. Stage 2b needs point-in-time snapshots, so old weeks are training data, not clutter.
 

@@ -7,6 +7,11 @@ Task map:
     Edge cases: missing/reordered headings, empty sections, unfilled hint comment,
         missing `Closes #N`, blank Base branch / Milestone / validation lines,
         AI attribution lines, Windows line endings.
+    Edge cases section (AGENTS.md §9): a bare "None." or "N/A" with no reason; a "None"
+        reason too short to explain anything; a bullet with no "→" handling; a bullet that
+        cites neither a test nor "untested: <reason>"; free text that is not a bullet;
+        ASCII "->" arrows; parametrized test ids like test_x[case]; cited tests that do not
+        exist in tests/.
     Invariant: a correctly filled template produces zero violations.
 """
 
@@ -30,6 +35,10 @@ Base branch: main
 ## Validation
 - `pytest`: 42 passed in 1.8s
 - `ruff check .`: All checks passed!
+
+## Edge cases
+- Letter O in the digit positions ("KO12345") → repaired to "K012345" (`test_ocr_repair_replaces_letter_O_with_zero_in_k_number`)
+- Candidate shorter than 7 characters → returns None (`test_ocr_repair_rejects_short_candidate`)
 
 ## Contract / data changes
 None.
@@ -154,7 +163,7 @@ def test_windows_line_endings_are_accepted():
 def test_empty_body_reports_every_required_heading():
     # Sample: an empty PR body (author deleted the whole template).
     violations = load_checker().find_violations("")
-    assert sum("missing heading" in v for v in violations) == 6
+    assert sum("missing heading" in v for v in violations) == 7
 
 
 def test_commits_section_with_only_empty_bullet_is_reported_as_empty():
@@ -162,3 +171,135 @@ def test_commits_section_with_only_empty_bullet_is_reported_as_empty():
     body = VALID_BODY.replace("- extraction/ocr: add O-to-0 repair for K-numbers", "-")
     violations = load_checker().find_violations(body)
     assert any("Commits" in v and "empty" in v for v in violations)
+
+
+def edge_cases(section: str) -> str:
+    """Returns VALID_BODY with its Edge cases section replaced.
+
+    Args:
+        section: New text under "## Edge cases".
+
+    Returns:
+        str: The modified PR body.
+    """
+    start = VALID_BODY.index("## Edge cases\n") + len("## Edge cases\n")
+    end = VALID_BODY.index("## Contract")
+    return VALID_BODY[:start] + section + "\n" + VALID_BODY[end:]
+
+
+def edge_violations(section: str) -> list[str]:
+    """Returns only the Edge cases violations for a replacement section.
+
+    Args:
+        section: New text under "## Edge cases".
+
+    Returns:
+        list[str]: Violations that mention edge cases.
+    """
+    return [v for v in load_checker().find_violations(edge_cases(section)) if "dge case" in v]
+
+
+def test_missing_edge_cases_heading_is_reported():
+    # Sample: VALID_BODY with the whole "## Edge cases" section deleted.
+    body = VALID_BODY.split("## Edge cases")[0] + "## Contract" + VALID_BODY.split("## Contract")[1]
+    violations = load_checker().find_violations(body)
+    assert any("## Edge cases" in v for v in violations)
+
+
+def test_edge_cases_with_only_template_placeholder_is_reported_as_empty():
+    # Sample: the template's hint comment and empty "-" bullet left untouched.
+    violations = load_checker().find_violations(edge_cases("<!-- hint -->\n-\n"))
+    assert any("Edge cases" in v and "empty" in v for v in violations)
+
+
+def test_bare_none_without_reason_is_rejected():
+    # Sample: "None." alone. Saying there are no edge cases requires explaining why.
+    assert edge_violations("None.")
+
+
+def test_not_applicable_shorthand_is_rejected():
+    # Sample: "N/A". Same rule as a bare None.
+    assert edge_violations("N/A")
+
+
+def test_none_with_too_short_reason_is_rejected():
+    # Sample: "None — trivial." Two words don't explain why no input can misbehave.
+    assert edge_violations("None — trivial.")
+
+
+def test_none_with_real_reason_is_accepted():
+    # Sample: a docs-only PR. The reason names what changed and why no input reaches code.
+    reason = "None — this PR only edits Markdown in docs/, so no code path or input changes."
+    assert edge_violations(reason) == []
+
+
+def test_bullet_without_handling_arrow_is_rejected():
+    # Sample: names the case but never says what the code does about it.
+    assert edge_violations("- Empty export zip (`test_count_export_records_rejects_empty_zip`)")
+
+
+def test_bullet_without_test_or_untested_reason_is_rejected():
+    # Sample: case and handling given, but no proof: no test cited, no "untested:" reason.
+    assert edge_violations("- Empty export zip → raises ExportIntegrityError")
+
+
+def test_untested_bullet_with_reason_is_accepted():
+    # Sample: an honest gap. Untested is allowed only with the reason it can't be tested.
+    bullet = "- R2 network timeout → boto3 retries (untested: botocore Stubber cannot simulate timeouts)"
+    assert edge_violations(bullet) == []
+
+
+def test_untested_without_reason_is_rejected():
+    # Sample: "untested:" followed by nothing.
+    assert edge_violations("- R2 network timeout → boto3 retries (untested:)")
+
+
+def test_ascii_arrow_and_parametrized_test_id_are_accepted():
+    # Sample: "->" typed instead of "→", and a pytest parametrize id in the test name.
+    bullet = "- Key with '..' -> InvalidKeyError (`test_local_store_rejects_keys[parent-dir]`)"
+    assert edge_violations(bullet) == []
+
+
+def test_free_text_line_in_edge_cases_is_rejected():
+    # Sample: prose instead of bullets. Each case must be its own checkable bullet.
+    assert edge_violations("We handled the usual edge cases and they are tested.")
+
+
+def test_cited_tests_that_do_not_exist_are_reported(tmp_path):
+    # Sample: a tests/ tree defining one test; the body cites it and a made-up one.
+    (tmp_path / "test_a.py").write_text("def test_real_one():\n    pass\n", encoding="utf-8")
+    body = edge_cases("- A → B (`test_real_one`)\n- C → D (`test_made_up[case]`)")
+    missing = load_checker().find_unknown_test_references(body, tmp_path)
+    assert missing == ["test_made_up"]
+
+
+def test_cited_test_methods_inside_classes_are_found(tmp_path):
+    # Sample: a unittest-style method indented inside a class.
+    (tmp_path / "test_b.py").write_text(
+        "class T:\n    def test_in_class(self):\n        pass\n", encoding="utf-8"
+    )
+    body = edge_cases("- A → B (`test_in_class`)")
+    assert load_checker().find_unknown_test_references(body, tmp_path) == []
+
+
+def test_template_headings_match_the_checker_in_order():
+    # Sample: .github/pull_request_template.md. If the template and REQUIRED_HEADINGS drift,
+    # every PR filled from the template fails CI.
+    template = (SCRIPT_PATH.parents[1] / "pull_request_template.md").read_text(encoding="utf-8")
+    headings = [line.rstrip() for line in template.splitlines() if line.startswith("## ")]
+    assert headings == load_checker().REQUIRED_HEADINGS
+
+
+def test_pr_template_workflow_checks_out_tests_to_verify_cited_tests():
+    # Sample: .github/workflows/pr-template.yml. Its sparse checkout must include tests/,
+    # or every cited test would be reported as unverifiable.
+    workflow = (SCRIPT_PATH.parents[1] / "workflows" / "pr-template.yml").read_text(encoding="utf-8")
+    assert "tests" in workflow.split("sparse-checkout:")[1].split("- uses:")[0]
+
+
+def test_test_names_inside_the_template_hint_comment_are_not_treated_as_citations(tmp_path):
+    # Sample: the template's hint comment, which shows `test_that_proves_it` as an example,
+    # left in place above a real bullet. Only the real bullet's citation counts.
+    (tmp_path / "test_c.py").write_text("def test_real():\n    pass\n", encoding="utf-8")
+    body = edge_cases("<!-- e.g. (`test_that_proves_it`) -->\n- A → B (`test_real`)")
+    assert load_checker().find_unknown_test_references(body, tmp_path) == []

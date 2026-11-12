@@ -103,12 +103,16 @@ def parse_export_listing(index: dict[str, Any], source: str) -> ExportListing:
         ExportListing: The export_date and its partitions.
 
     Raises:
-        ValueError: If source is unsupported or export_date is not YYYY-MM-DD.
+        ValueError: If source is unsupported or missing from the index, export_date is not
+            YYYY-MM-DD, or the source lists no partitions or a partition with 0 records.
     """
     if source not in SOURCES:
         raise ValueError(f"Unsupported openFDA source {source!r}; expected one of {sorted(SOURCES)}")
     group, name = SOURCES[source]
-    entry = index["results"][group][name]
+    try:
+        entry = index["results"][group][name]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"download.json has no entry for {group}/{name} (source {source!r})") from exc
     export_date = entry["export_date"]
     try:
         date.fromisoformat(export_date)
@@ -122,6 +126,10 @@ def parse_export_listing(index: dict[str, Any], source: str) -> ExportListing:
         )
         for p in entry["partitions"]
     ]
+    if not partitions:
+        raise ValueError(f"download.json lists no partitions for {source!r}")
+    if empty := [p.file_name for p in partitions if p.records <= 0]:
+        raise ValueError(f"download.json lists 0 records for {source!r} partitions {empty}")
     return ExportListing(source=source, export_date=export_date, partitions=partitions)
 
 
@@ -255,12 +263,15 @@ def read_export_stats(zip_path: Path) -> ExportStats:
     Raises:
         ExportIntegrityError: If the zip does not hold exactly one entry or its JSON is malformed.
     """
-    with zipfile.ZipFile(zip_path) as archive:
-        names = archive.namelist()
-        if len(names) != 1:
-            raise ExportIntegrityError(f"Expected one file in {zip_path.name}, found {names}")
-        with archive.open(names[0]) as raw:
-            return _count_results(_JsonStream(io.TextIOWrapper(raw, encoding="utf-8")))
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+            if len(names) != 1:
+                raise ExportIntegrityError(f"Expected one file in {zip_path.name}, found {names}")
+            with archive.open(names[0]) as raw:
+                return _count_results(_JsonStream(io.TextIOWrapper(raw, encoding="utf-8")))
+    except zipfile.BadZipFile as exc:
+        raise ExportIntegrityError(f"{zip_path.name} is not a valid zip (truncated download?)") from exc
 
 
 def count_export_records(zip_path: Path) -> int:
