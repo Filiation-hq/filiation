@@ -2,10 +2,10 @@
 
 # One-time setup: installs both packages in editable mode
 install:
-	pip install -e packages/core -e packages/pipeline -e packages/models
+	pip install -e "packages/core[remote]" -e packages/pipeline -e packages/models
 
 install-dev:
-	pip install -e packages/core -e packages/pipeline -e packages/models pytest ruff==0.17.4
+	pip install -e "packages/core[remote]" -e packages/pipeline -e packages/models pytest ruff==0.17.4
 
 # Run the full test suite
 test:

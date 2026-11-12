@@ -96,5 +96,5 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 - **`export_date`**: openFDA's own version date for a bulk export (from `download.json`). Raw JSON is partitioned by it, not by our run date.
 - **Write-once**: Once an object exists in the raw store, it is never overwritten. New content always gets a new key.
 - **`latest.json` pointer**: The only mutable object in the raw store. It points to the newest complete run manifest and is updated last.
-- **`RawStore`**: The storage interface (`put_once`, `get`, `exists`, `list`). `LocalRawStore` writes under `data/raw/`; `R2RawStore` writes to the `stemma-raw` bucket using the same keys.
+- **`RawStore`**: The storage interface (`put_once`, `get`, `exists`, `list`). `LocalRawStore` writes under `data/raw/`; `R2RawStore` writes to the `stemma-raw` bucket using the same keys. `STEMMA_RAW_STORE` picks one (`local` by default).
 - **Canonical writer**: A process allowed to write to the `stemma-raw` bucket: the scheduled ingestion workflow, or the backfill job on the Oracle VM, both running code from `main`.
