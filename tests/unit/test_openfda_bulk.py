@@ -16,13 +16,19 @@ Task map:
 """
 
 import hashlib
-import io
 import json
-import zipfile
-from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+from openfda_fakes import (
+    FIXTURES,
+    KEY,
+    PARTITION_URL,
+    fixture_export_zip,
+    load_index,
+    make_export_zip,
+    opener_for,
+)
 from stemma.core.storage.raw_store import LocalRawStore
 from stemma.pipeline.crawler.openfda_bulk import (
     DOWNLOAD_INDEX_URL,
@@ -32,84 +38,6 @@ from stemma.pipeline.crawler.openfda_bulk import (
     ingest_export,
     parse_export_listing,
 )
-
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "openfda"
-PARTITION_URL = "https://download.open.fda.gov/device/510k/device-510k-0001-of-0001.json.zip"
-KEY = "openfda/510k/export_date=2026-11-09/device-510k-0001-of-0001.json.zip"
-
-
-def load_index() -> dict:
-    """Loads the trimmed download.json fixture.
-
-    Returns:
-        dict: Parsed index with device/510k (3 records) and device/recall (2 records).
-    """
-    return json.loads((FIXTURES / "download.json").read_text(encoding="utf-8"))
-
-
-def make_export_zip(entries: dict[str, bytes]) -> bytes:
-    """Builds an in-memory zip with the given entries, like openFDA's partition zips.
-
-    Args:
-        entries: Mapping of entry name to its uncompressed bytes.
-
-    Returns:
-        bytes: The zip archive.
-    """
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, data in entries.items():
-            archive.writestr(name, data)
-    return buffer.getvalue()
-
-
-def fixture_export_zip() -> bytes:
-    """Zips the 3-record 510(k) export fixture under openFDA's inner file name.
-
-    Returns:
-        bytes: Zip bytes for device-510k-0001-of-0001.json.zip.
-    """
-    body = (FIXTURES / "device-510k-0001-of-0001.json").read_bytes()
-    return make_export_zip({"device-510k-0001-of-0001.json": body})
-
-
-class FakeOpener:
-    """Serves fixed bytes per URL and records every URL requested."""
-
-    def __init__(self, responses: dict[str, bytes]) -> None:
-        """Stores the URL-to-bytes map.
-
-        Args:
-            responses: Bytes to return for each URL; any other URL raises KeyError.
-        """
-        self.responses = responses
-        self.calls: list[str] = []
-
-    def __call__(self, url: str) -> io.BytesIO:
-        """Returns a readable stream for url.
-
-        Args:
-            url: Requested URL.
-
-        Returns:
-            io.BytesIO: Stream over the configured bytes.
-        """
-        self.calls.append(url)
-        return io.BytesIO(self.responses[url])
-
-
-def opener_for(zip_bytes: bytes, index: dict | None = None) -> FakeOpener:
-    """Builds a FakeOpener serving the index and one 510(k) partition zip.
-
-    Args:
-        zip_bytes: Bytes served at PARTITION_URL.
-        index: Index to serve; defaults to the download.json fixture.
-
-    Returns:
-        FakeOpener: Opener for DOWNLOAD_INDEX_URL and PARTITION_URL only.
-    """
-    index_bytes = json.dumps(index or load_index()).encode("utf-8")
-    return FakeOpener({DOWNLOAD_INDEX_URL: index_bytes, PARTITION_URL: zip_bytes})
 
 
 def test_parse_export_listing_reads_export_date_and_partitions_for_510k():
