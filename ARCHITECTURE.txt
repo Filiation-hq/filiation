@@ -11,6 +11,7 @@ stemma/
 │   ├── scripts/
 │   │   └── check_pr_body.py      # Validates PR bodies against the template
 │   └── workflows/
+│       ├── ci.yml                # CI: make test + make lint on every PR
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
 │
 ├── data/                         # Three-tier local & remote data layout
