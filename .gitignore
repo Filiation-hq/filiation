@@ -64,3 +64,6 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+
+# Private Plans
+BUILDINPUBLIC.md
