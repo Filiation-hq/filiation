@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "disclaimer": "Fixture trimmed from https://api.fda.gov/download.json (fetched 2026-11-12). Record counts reduced to match the 3-record fixture export.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/"
+  },
+  "results": {
+    "device": {
+      "510k": {
+        "export_date": "2026-11-09",
+        "partitions": [
+          {
+            "display_name": "/device/510k data",
+            "file": "https://download.open.fda.gov/device/510k/device-510k-0001-of-0001.json.zip",
+            "size_mb": "0.01",
+            "records": 3
+          }
+        ],
+        "total_records": 3
+      },
+      "recall": {
+        "export_date": "2026-11-10",
+        "partitions": [
+          {
+            "display_name": "/device/recall data",
+            "file": "https://download.open.fda.gov/device/recall/device-recall-0001-of-0001.json.zip",
+            "size_mb": "0.01",
+            "records": 2
+          }
+        ],
+        "total_records": 2
+      }
+    }
+  }
+}

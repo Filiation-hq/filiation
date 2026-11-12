@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "disclaimer": "Fixture in the openFDA bulk export layout (2-space indent, meta then results). Values are illustrative.",
+    "last_updated": "2026-11-09",
+    "results": {
+      "skip": 0,
+      "limit": 3,
+      "total": 3
+    }
+  },
+  "results": [
+    {
+      "k_number": "K210758",
+      "applicant": "Stryker Orthopaedics",
+      "device_name": "Spine Nav {navigation] system",
+      "product_code": "MRN",
+      "decision_date": "2021-04-15",
+      "openfda": {
+        "registration_number": ["3005941719", "1220477"]
+      }
+    },
+    {
+      "k_number": "K030123",
+      "applicant": "Example \"Quoted\" Medical, Inc.",
+      "device_name": "Catheter, Ureteral",
+      "product_code": "EYB",
+      "decision_date": "2003-05-02",
+      "openfda": {}
+    },
+    {
+      "k_number": "K882211",
+      "applicant": "Legacy Devices Co",
+      "device_name": "Stent, Ureteral",
+      "product_code": "FAD",
+      "decision_date": "1988-09-30",
+      "openfda": {
+        "registration_number": []
+      }
+    }
+  ]
+}
