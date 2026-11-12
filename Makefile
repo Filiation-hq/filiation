@@ -9,7 +9,7 @@ install-dev:
 
 # Run the full test suite
 test:
-	PYTHONPATH="packages/core/src:packages/pipeline/src" python3 -m unittest discover -s tests/unit -v
+	PYTHONPATH="packages/core/src:packages/pipeline/src" python3 -m pytest
 
 # Run the pipeline CLI (use 'make run CMD=status' etc.)
 run:
