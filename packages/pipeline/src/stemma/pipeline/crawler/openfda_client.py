@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -23,12 +23,12 @@ class OpenFDAClient:
 
     BASE_URL = "https://api.fda.gov/device"
 
-    def __init__(self, api_key: Optional[str] = None, cache_dir: Optional[Path] = None):
+    def __init__(self, api_key: str | None = None, cache_dir: Path | None = None):
         self.api_key = api_key
         self.cache_dir = cache_dir or (get_raw_dir() / "openfda")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _make_request(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
         """Performs HTTP GET against openFDA with rate-limit respect."""
         if self.api_key:
             params["api_key"] = self.api_key
@@ -56,14 +56,14 @@ class OpenFDAClient:
 
         raise RuntimeError(f"Failed to fetch {url} after 3 attempts.")
 
-    def fetch_510k_records(self, limit: int = 100, skip: int = 0, search: Optional[str] = None) -> List[DeviceNode]:
+    def fetch_510k_records(self, limit: int = 100, skip: int = 0, search: str | None = None) -> list[DeviceNode]:
         """Fetches 510(k) clearances and parses into DeviceNode instances."""
-        params: Dict[str, Any] = {"limit": min(limit, 100), "skip": skip}
+        params: dict[str, Any] = {"limit": min(limit, 100), "skip": skip}
         if search:
             params["search"] = search
 
         data = self._make_request("510k.json", params)
-        records: List[DeviceNode] = []
+        records: list[DeviceNode] = []
         for item in data.get("results", []):
             records.append(
                 DeviceNode(
@@ -80,14 +80,14 @@ class OpenFDAClient:
             )
         return records
 
-    def fetch_recalls(self, limit: int = 100, skip: int = 0, search: Optional[str] = None) -> List[RecallRecord]:
+    def fetch_recalls(self, limit: int = 100, skip: int = 0, search: str | None = None) -> list[RecallRecord]:
         """Fetches device recalls and parses into RecallRecord instances."""
-        params: Dict[str, Any] = {"limit": min(limit, 100), "skip": skip}
+        params: dict[str, Any] = {"limit": min(limit, 100), "skip": skip}
         if search:
             params["search"] = search
 
         data = self._make_request("recall.json", params)
-        records: List[RecallRecord] = []
+        records: list[RecallRecord] = []
         for item in data.get("results", []):
             records.append(
                 RecallRecord(

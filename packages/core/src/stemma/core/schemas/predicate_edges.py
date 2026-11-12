@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class RelationshipType(str, Enum):
@@ -31,11 +31,11 @@ class PredicateEdge:
     device_k: str
     predicate_k: str
     relationship_type: RelationshipType = RelationshipType.PRIMARY_PREDICATE
-    source_page_num: Optional[int] = None
+    source_page_num: int | None = None
     confidence_score: float = 1.0
     extraction_method: ExtractionMethod = ExtractionMethod.DIGITAL_REGEX
-    raw_text_snippet: Optional[str] = None
-    section_heading: Optional[str] = None
+    raw_text_snippet: str | None = None
+    section_heading: str | None = None
     extracted_at: str = ""
 
     def __post_init__(self) -> None:
@@ -51,14 +51,14 @@ class PredicateEdge:
         # Clamp confidence score
         self.confidence_score = max(0.0, min(1.0, float(self.confidence_score)))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["relationship_type"] = self.relationship_type.value
         data["extraction_method"] = self.extraction_method.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> PredicateEdge:
+    def from_dict(cls, data: dict[str, Any]) -> PredicateEdge:
         cleaned = dict(data)
         if "relationship_type" in cleaned:
             cleaned["relationship_type"] = RelationshipType(cleaned["relationship_type"])
