@@ -544,9 +544,7 @@ def run_static(base: str, head: str, new_tests_path: Path, body: str) -> int:
 
 
 def probe_command(node_ids: list[str]) -> list[str]:
-    """Builds the pytest command that runs node_ids with the outcome probe.
-
-    One module failing to import must not stop the rest, so collection errors don't abort.
+    """Builds the pytest command that runs node_ids with the outcome probe, past collection errors.
 
     Args:
         node_ids: Pytest node ids to run.
