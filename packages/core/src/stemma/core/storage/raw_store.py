@@ -14,6 +14,7 @@ from typing import Any
 from stemma.core.utils.paths import get_raw_dir
 
 DEFAULT_BUCKET = "stemma-raw"
+LATEST_KEY = "latest.json"
 
 
 class KeyExistsError(Exception):
@@ -70,6 +71,14 @@ class RawStore(ABC):
         Raises:
             KeyExistsError: If an object already exists at key.
             InvalidKeyError: If key is malformed.
+        """
+
+    @abstractmethod
+    def write_latest(self, data: bytes) -> None:
+        """Replaces latest.json, the one mutable object, with data.
+
+        Args:
+            data: Serialized LatestPointer.
         """
 
     @abstractmethod
@@ -161,6 +170,18 @@ class LocalRawStore(RawStore):
         finally:
             os.unlink(tmp_name)
         return hashlib.sha256(payload).hexdigest()
+
+    def write_latest(self, data: bytes) -> None:
+        """Atomically replaces latest.json, so readers see the old or new pointer, never half.
+
+        Args:
+            data: Serialized LatestPointer.
+        """
+        self.root.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=self.root, prefix=".tmp-")
+        with os.fdopen(fd, "wb") as tmp:
+            tmp.write(data)
+        os.replace(tmp_name, self.root / LATEST_KEY)
 
     def get(self, key: str, dest: Path) -> Path:
         """Copies the file at key to a local path.
@@ -274,6 +295,16 @@ class R2RawStore(RawStore):
                 raise KeyExistsError(key) from exc
             raise
         return digest
+
+    def write_latest(self, data: bytes) -> None:
+        """Overwrites latest.json without If-None-Match; R2 PUTs replace atomically.
+
+        Args:
+            data: Serialized LatestPointer.
+        """
+        self.client.put_object(
+            Bucket=self.bucket, Key=LATEST_KEY, Body=data, ContentType="application/json"
+        )
 
     def get(self, key: str, dest: Path) -> Path:
         """Streams the object at key to a local file.
