@@ -80,3 +80,9 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 - `PM`: Physical Medicine
 - `RA`: Radiology
 - `SU`: General & Plastic Surgery
+
+---
+
+## 6. Project Terms
+
+- **Stage**: A roadmap phase (0–4, with Stage 2 split into 2a and 2b) whose start is gated on the previous stage's testable exit criteria, not on a date. See `docs/ROADMAP.md` and ADR-009.
