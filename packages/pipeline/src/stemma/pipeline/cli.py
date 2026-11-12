@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import asdict
 from pathlib import Path
 
 import click
 import pandas as pd
 from stemma.core.data_loader import StemmaDataLoader
 from stemma.core.schemas.device_nodes import DeviceNode
+from stemma.core.storage.raw_store import raw_store_from_env
 from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
 from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler
+from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener, ingest_export
 from stemma.pipeline.crawler.openfda_client import OpenFDAClient
 from stemma.pipeline.crawler.sampler import PilotSampler
 from stemma.pipeline.extraction.parser import SummaryParser
@@ -50,6 +53,16 @@ def fetch_openfda(limit: int, recalls: bool, output: str | None) -> None:
         json.dump(data, f, indent=2)
 
     logger.info("Saved %d records to %s", len(data), out_path)
+
+
+@cli.command("ingest-openfda")
+@click.option(
+    "--source", type=click.Choice(sorted(SOURCES)), required=True, help="openFDA export to ingest"
+)
+def ingest_openfda(source: str) -> None:
+    """Stores the current openFDA bulk export write-once in the raw store set by STEMMA_RAW_STORE."""
+    result = ingest_export(source, raw_store_from_env(), opener=default_opener)
+    click.echo(json.dumps(asdict(result), indent=2))
 
 
 @cli.command("sample-pilot")
