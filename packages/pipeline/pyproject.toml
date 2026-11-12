@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stemma-pipeline"
+version = "0.1.0"
+description = "Data engineering pipeline for scraping, OCR, extraction, and linkage of FDA 510(k) lineages"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Steven Rocca" }
+]
+dependencies = [
+    "requests>=2.28.0",
+    "click>=8.0.0",
+    "pandas>=2.0.0",
+    "pdfplumber>=0.10.0",
+    "pillow>=10.0.0",
+    "tqdm>=4.65.0",
+]
+
+[project.scripts]
+stemma-pipeline = "stemma.pipeline.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["stemma*"]
