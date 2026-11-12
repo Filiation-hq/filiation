@@ -1,15 +1,19 @@
-.PHONY: install install-dev test run
+.PHONY: install install-dev test lint run
 
 # One-time setup: installs both packages in editable mode
 install:
-	pip install -e packages/core -e packages/pipeline
+	pip install -e packages/core -e packages/pipeline -e packages/models
 
 install-dev:
-	pip install -e packages/core -e packages/pipeline pytest ruff
+	pip install -e packages/core -e packages/pipeline -e packages/models pytest ruff==0.17.4
 
 # Run the full test suite
 test:
-	PYTHONPATH="packages/core/src:packages/pipeline/src" python3 -m pytest
+	PYTHONPATH="packages/core/src:packages/pipeline/src:packages/models/src" python3 -m pytest
+
+# Lint the whole repo with the pinned ruff version
+lint:
+	ruff check .
 
 # Run the pipeline CLI (use 'make run CMD=status' etc.)
 run:

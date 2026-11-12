@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOTS = [
     REPO_ROOT / "packages" / "core" / "src" / "stemma" / "core",
     REPO_ROOT / "packages" / "pipeline" / "src" / "stemma" / "pipeline",
+    REPO_ROOT / "packages" / "models" / "src" / "stemma" / "models",
 ]
 
 
@@ -44,3 +45,28 @@ def test_shared_stemma_namespace_has_no_init_file():
         for p in (REPO_ROOT / "packages").glob("*/src/stemma/__init__.py")
     ]
     assert offenders == []
+
+
+def test_every_package_root_exists_with_init_file():
+    # Sample: the core, pipeline, and models roots. Before #10, packages/models had no
+    # src/stemma/models/ directory, only an empty src/cli.py.
+    missing = [str(r.relative_to(REPO_ROOT)) for r in PACKAGE_ROOTS if not (r / "__init__.py").exists()]
+    assert missing == []
+
+
+def test_no_source_files_sit_outside_the_stemma_namespace():
+    # Sample: every .py file under packages/*/src/. Files directly in src/ (like the old
+    # packages/models/src/cli.py) are not importable as stemma.* and break the layout.
+    strays = [
+        str(p.relative_to(REPO_ROOT))
+        for p in (REPO_ROOT / "packages").glob("*/src/*.py")
+    ]
+    assert strays == []
+
+
+def test_models_pyproject_declares_stemma_models_distribution():
+    # Sample: packages/models/pyproject.toml. Before #10 it was 0 bytes, so
+    # `pip install -e packages/models` failed.
+    text = (REPO_ROOT / "packages" / "models" / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'name = "stemma-models"' in text
+    assert 'where = ["src"]' in text

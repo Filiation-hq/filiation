@@ -1,61 +1,64 @@
 stemma/
-├── CONTEXT.md                    # Domain glossary (510(k) terms, recall classes, review panels)
-├── README.md                     # Architecture overview, setup, and extraction benchmarks
-├── pyproject.toml                # Workspace tool config (ruff / pytest); ships no code (ADR-002)
-├── .gitignore                    # Strictly excludes data/raw/ and data/interim/
 ├── AGENTS.md                     # Operating rules for every agent (read first)
-├── CLAUDE.md                     # Pointer to AGENTS.md for Claude Code
+├── CLAUDE.md / GEMINI.md         # One-line pointers to AGENTS.md for Claude Code / Gemini CLI
+├── CONTEXT.md                    # Domain glossary (510(k) terms, recall classes, review panels)
+├── ARCHITECTURE.txt              # This map; also the repo-root marker for get_repo_root() (do not rename)
+├── README.md                     # Overview, quickstart, CLI usage, data contracts
+├── RESUME.md                     # Append-only quantified results for pitches and resumes
+├── Makefile                      # install / install-dev / test / lint / run
+├── pyproject.toml                # Workspace tool config (ruff / pytest); ships no code (ADR-002)
+├── .gitignore                    # Excludes data/raw/ and data/interim/ at any depth
 │
 ├── .github/                      # GitHub config & CI
 │   ├── pull_request_template.md  # Mandatory PR body format (AGENTS.md §8)
 │   ├── scripts/
 │   │   └── check_pr_body.py      # Validates PR bodies against the template
 │   └── workflows/
+│       ├── ci.yml                # CI: make test + make lint on every PR
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
 │
-├── data/                         # Three-tier local & remote data layout
-│   ├── raw/                      # [GIT-IGNORED] 50–150 GB raw 510(k) PDFs & openFDA zips
+├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout, created on demand
+│   ├── raw/                      # [GIT-IGNORED] Raw 510(k) PDFs & openFDA JSON
 │   ├── interim/                  # [GIT-IGNORED] Extracted OCR text & candidate regex matches
-│   └── derived/                  # Syncable DuckDB/Parquet edge lists & release datasets (<100 MB)
-│       ├── schema/               # Table schemas (nodes, edges, recalls)
-│       └── releases/             # Local target for `stemma fetch-data`
+│   └── derived/                  # Parquet/CSV edge lists & release datasets (<100 MB may be committed)
+│       └── releases/             # Output of `stemma-pipeline export-derived`
 │
-├── packages/                     # Python subpackage workspace boundaries
-│   ├── core/                     # Shared data contracts and sync utilities
+├── packages/                     # One installable package per ownership boundary (ADR-002)
+│   ├── core/                     # stemma-core: shared data contracts and utilities
 │   │   ├── src/stemma/core/
-│   │   │   ├── schemas/          # Pydantic/DuckDB table contracts (predicate_edges, recalls)
-│   │   │   ├── utils/            # Hashing, Cloudflare R2 bucket fetch/upload scripts
-│   │   │   └── data_loader.py    # `stemma fetch-data` CLI entrypoint for modelers
+│   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls; DuckDB DDL strings
+│   │   │   ├── utils/            # hashing.py, paths.py (repo-root & data-tier resolution)
+│   │   │   └── data_loader.py    # Loads derived Parquet; `stemma-data` entrypoint
 │   │   └── pyproject.toml
 │   │
-│   ├── pipeline/                 # Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
+│   ├── pipeline/                 # stemma-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
 │   │   ├── src/stemma/pipeline/
-│   │   │   ├── crawler/          # FDA CDRH scraping engine & openFDA sync
-│   │   │   ├── ocr/              # Tesseract OCR engine for pre-2003 scanned PDFs
-│   │   │   ├── extraction/       # K-number regex, predicate vs. reference classifier
-│   │   │   ├── linkage/          # Trade-name resolution, recall & MAUDE entity mapping
-│   │   │   └── cli.py            # CLI: `stemma-pipeline run`, `stemma-pipeline export-derived`
+│   │   │   ├── crawler/          # openFDA client, CDRH PDF crawler, stratified pilot sampler
+│   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
+│   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
+│   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (MAUDE planned)
+│   │   │   └── cli.py            # `stemma-pipeline` fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived
 │   │   └── pyproject.toml
 │   │
-│   └── models/                   # Data Science (survival analysis, frailty models, risk scores)
-│       ├── src/stemma/models/
-│       │   ├── loader/           # Ingests clean Parquet tables from data/derived/
-│       │   ├── features/         # Time-varying exposure matrices (immortal-time bias safe)
-│       │   ├── survival/         # Cox PH models, product-code frailty, ancestor score math
-│       │   ├── backtesting/      # Temporal out-of-time splits & calibration generators
-│       │   └── cli.py            # CLI: `stemma-models train`, `stemma-models evaluate`
+│   └── models/                   # stemma-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
+│       ├── src/stemma/models/    # Package root only; subpackages below are (planned)
+│       │   ├── loader/           # (planned) Ingests Parquet tables from data/derived/
+│       │   ├── features/         # (planned) Time-varying exposure matrices (immortal-time bias safe)
+│       │   ├── survival/         # (planned) Cox PH, product-code effects, ancestor score math
+│       │   ├── backtesting/      # (planned) Temporal out-of-time splits & calibration
+│       │   └── cli.py            # (planned) `stemma-models train`, `stemma-models evaluate`
 │       └── pyproject.toml
 │
-├── notebooks/                    # Data Science research & verification scripts
+├── notebooks/                    # Data Science research (title-cell placeholders; owner Alden)
 │   ├── 01_jama_replication.ipynb # 2017–2021 JAMA 6.4x risk ratio verification
 │   ├── 02_survival_baseline.ipynb# Baseline product-code vs ancestor-risk survival curves
 │   └── 03_calibration_check.ipynb# Calibration curves and temporal out-of-time backtests
 │
-├── tests/                        # Test suite & CI fixtures
-│   ├── fixtures/                 # ~20 curated 510(k) PDFs (1996–2026) checked into Git
-│   ├── unit/                     # Pipeline parsing rules & schema validation tests
-│   └── integration/              # Pipeline extraction tests against checked-in fixtures
+├── tests/                        # pytest suite (`make test`)
+│   ├── fixtures/                 # sample_summary_texts.json (curated 510(k) summary text by era)
+│   ├── unit/                     # One test_<area>.py per module or config surface
+│   └── integration/              # (planned) Cross-module pipeline tests against fixtures
 │
-└── docs/                         # Architecture decision records & literature summaries
+└── docs/
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
-    └── adrs/                     # One ADR-NNN-*.md per major decision
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-007)

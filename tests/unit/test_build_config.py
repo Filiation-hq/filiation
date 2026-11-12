@@ -42,3 +42,24 @@ def test_make_test_target_does_not_use_unittest_discover():
 def test_make_install_dev_installs_pytest():
     # Sample: the `install-dev:` recipe in Makefile. `make test` needs pytest installed.
     assert "pytest" in read_make_target("install-dev")
+
+
+def test_make_lint_target_runs_ruff_check():
+    # Sample: the `lint:` recipe in Makefile. CI and developers share it, so
+    # local lint results match CI.
+    assert "ruff check ." in read_make_target("lint")
+
+
+def test_ci_workflow_runs_make_test_and_make_lint_on_pull_requests():
+    # Sample: .github/workflows/ci.yml. It must trigger on pull_request and call
+    # the same Makefile targets developers run locally.
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "pull_request" in workflow
+    assert "make test" in workflow
+    assert "make lint" in workflow
+
+
+def test_make_install_dev_pins_ruff_version():
+    # Sample: the `install-dev:` recipe. An unpinned ruff lets new upstream rules
+    # break CI without any code change.
+    assert re.search(r"ruff==\d+\.\d+\.\d+", read_make_target("install-dev"))

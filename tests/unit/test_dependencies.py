@@ -79,3 +79,9 @@ def test_root_workspace_declares_no_runtime_dependencies():
     # Sample: root pyproject.toml. It ships no code (ADR-002), so runtime
     # dependencies belong to the packages that import them.
     assert declared_dependencies(REPO_ROOT / "pyproject.toml") == []
+
+
+def test_models_declares_only_dependencies_it_imports():
+    # Sample: packages/models/pyproject.toml vs imports in packages/models/src/.
+    # It declares none until the survival library ADR (#9) is accepted.
+    assert unused_dependencies("models") == []
