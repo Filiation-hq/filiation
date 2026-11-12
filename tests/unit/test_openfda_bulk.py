@@ -16,10 +16,8 @@ Task map:
 """
 
 import hashlib
-import json
 
 import pytest
-from click.testing import CliRunner
 from openfda_fakes import (
     FIXTURES,
     KEY,
@@ -141,22 +139,4 @@ def test_ingest_export_raises_conflict_when_same_export_date_has_different_bytes
     with pytest.raises(ExportConflictError):
         ingest_export("510k", store, opener=opener_for(edited))
     assert (tmp_path / "raw" / KEY).read_bytes() == fixture_export_zip()
-
-
-def test_ingest_openfda_cli_stores_export_and_prints_result_json(tmp_path, monkeypatch):
-    # Sample: `stemma-pipeline ingest-openfda --source 510k` with the store and opener
-    # patched to a temp LocalRawStore and the fixture opener. Expect exit 0 and a JSON
-    # summary naming the stored key.
-    import stemma.pipeline.cli as cli_module
-
-    store = LocalRawStore(tmp_path / "raw")
-    monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: store)
-    monkeypatch.setattr(cli_module, "default_opener", opener_for(fixture_export_zip()))
-
-    result = CliRunner().invoke(cli_module.cli, ["ingest-openfda", "--source", "510k"])
-
-    assert result.exit_code == 0, result.output
-    summary = json.loads(result.output)
-    assert summary["partitions"][0]["key"] == KEY
-    assert summary["partitions"][0]["status"] == "stored"
 

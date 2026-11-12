@@ -20,6 +20,7 @@ import pytest
 from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
 from stemma.core.storage.raw_store import (
+    LATEST_KEY,
     InvalidKeyError,
     KeyExistsError,
     LocalRawStore,
@@ -262,3 +263,26 @@ def test_raw_store_from_env_rejects_unknown_or_incomplete_configuration(tmp_path
     # Both must fail loudly instead of silently writing somewhere else.
     with pytest.raises(ValueError):
         raw_store_from_env(env, local_root=tmp_path)
+
+
+def test_local_write_latest_replaces_the_pointer_and_only_the_pointer(tmp_path):
+    # Sample: latest.json written for run 101, then for run 102. latest.json is the one
+    # mutable object (ADR-010), so the second write replaces the first.
+    store = LocalRawStore(tmp_path)
+    store.write_latest(b'{"run_id": "101"}')
+    store.write_latest(b'{"run_id": "102"}')
+    assert (tmp_path / LATEST_KEY).read_bytes() == b'{"run_id": "102"}'
+    assert store.list() == [LATEST_KEY]
+
+
+def test_r2_write_latest_puts_pointer_without_if_none_match():
+    # Sample: stubbed put_object for latest.json. Unlike put_once, the pointer write must
+    # not send IfNoneMatch, or every run after the first would fail with 412.
+    client = make_r2_client()
+    with Stubber(client) as stubber:
+        stubber.add_response(
+            "put_object",
+            {"ETag": '"p"'},
+            {"Bucket": BUCKET, "Key": LATEST_KEY, "Body": b'{"run_id": "102"}', "ContentType": "application/json"},
+        )
+        R2RawStore(BUCKET, client).write_latest(b'{"run_id": "102"}')
