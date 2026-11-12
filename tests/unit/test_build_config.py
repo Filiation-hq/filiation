@@ -70,3 +70,10 @@ def test_gitignore_excludes_private_build_in_public_plan():
     # so it must be ignored even when the repo is public again (#59).
     lines = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "BUILDINPUBLIC.md" in [line.strip() for line in lines]
+
+
+def test_gitignore_excludes_private_vm_notes():
+    # Sample: the repo's own .gitignore. VMCONFIG.md holds the Oracle VM's public IP, SSH
+    # user, and key path, so it must never reach the remote.
+    lines = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "VMCONFIG.md" in [line.strip() for line in lines]
