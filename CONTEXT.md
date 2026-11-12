@@ -86,3 +86,15 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 ## 6. Project Terms
 
 - **Stage**: A roadmap phase (0–4, with Stage 2 split into 2a and 2b) whose start is gated on the previous stage's testable exit criteria, not on a date. See `docs/ROADMAP.md` and ADR-009.
+
+---
+
+## 7. Storage Terms (ADR-010)
+
+- **Raw snapshot**: The set of raw objects (openFDA bulk exports, CDRH PDFs) that one ingestion run used, as listed in its run manifest. Snapshots are never edited.
+- **Run manifest**: `runs/<YYYY-MM-DD>_<run-id>/manifest.json`. It lists every object in a run with its key, SHA-256, size and record count, plus openFDA `export_date`, commit SHA and run ID. It is a shared data contract.
+- **`export_date`**: openFDA's own version date for a bulk export (from `download.json`). Raw JSON is partitioned by it, not by our run date.
+- **Write-once**: Once an object exists in the raw store, it is never overwritten. New content always gets a new key.
+- **`latest.json` pointer**: The only mutable object in the raw store. It points to the newest complete run manifest and is updated last.
+- **`RawStore`**: The storage interface (`put_once`, `get`, `exists`, `list`). `LocalRawStore` writes under `data/raw/`; `R2RawStore` writes to the `stemma-raw` bucket using the same keys.
+- **Canonical writer**: A process allowed to write to the `stemma-raw` bucket: the scheduled ingestion workflow, or the backfill job on the Oracle VM, both running code from `main`.
