@@ -63,17 +63,20 @@ class SourceSnapshot:
     status: str
     objects: list[ManifestObject] = field(default_factory=list)
     export_date: str | None = None
+    last_updated: str | None = None
 
     def __post_init__(self) -> None:
-        """Validates the status and export_date.
+        """Validates the status, export_date, and openFDA's meta.last_updated.
 
         Raises:
-            ValueError: If status is unknown or export_date is not YYYY-MM-DD.
+            ValueError: If status is unknown or either date is not YYYY-MM-DD.
         """
         if self.status not in STATUSES:
             raise ValueError(f"status {self.status!r} not in {STATUSES}")
         if self.export_date is not None:
             _check_iso_date(self.export_date, "export_date")
+        if self.last_updated is not None:
+            _check_iso_date(self.last_updated, "last_updated")
 
 
 @dataclass(frozen=True)
@@ -151,6 +154,7 @@ class RunManifest:
                 source=s["source"],
                 status=s["status"],
                 export_date=s.get("export_date"),
+                last_updated=s.get("last_updated"),
                 objects=[ManifestObject(**o) for o in s["objects"]],
             )
             for s in data["sources"]
