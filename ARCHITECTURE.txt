@@ -27,9 +27,10 @@ stemma/
 │   ├── core/                     # stemma-core: shared data contracts and utilities
 │   │   ├── src/stemma/core/
 │   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls; DuckDB DDL strings
+│   │   │   ├── storage/          # raw_store.py: write-once RawStore, local (data/raw/) and R2 backends (ADR-010)
 │   │   │   ├── utils/            # hashing.py, paths.py (repo-root & data-tier resolution)
 │   │   │   └── data_loader.py    # Loads derived Parquet; `stemma-data` entrypoint
-│   │   └── pyproject.toml
+│   │   └── pyproject.toml        # [remote] extra adds boto3 for R2RawStore
 │   │
 │   ├── pipeline/                 # stemma-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
 │   │   ├── src/stemma/pipeline/

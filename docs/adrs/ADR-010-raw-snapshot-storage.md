@@ -53,7 +53,7 @@ latest.json
 **Immutability.**
 - Writing to a key that already exists is refused, and a test enforces this.
 - `latest.json` is the only mutable object. It is updated only after the run's manifest is written, so a failed run never moves it.
-- If R2 supports conditional writes (If-None-Match), use them as a second guard. *Unverified.*
+- R2 enforces this too: `R2RawStore.put_once` sends `If-None-Match: *`, and R2 evaluates it atomically, answering 412 PreconditionFailed if the key exists. Verified 2026-11-12 against Cloudflare's [conditional operations docs](https://developers.cloudflare.com/r2/api/s3/conditional-operations/).
 
 **Retention.** Keep every export, PDF version, and manifest. Review when the bucket passes 100 GB or monthly cost passes the budget. Stage 2b needs point-in-time snapshots, so old weeks are training data, not clutter.
 
@@ -63,11 +63,11 @@ latest.json
 - The manifest schema lives in `packages/core/src/stemma/core/schemas/` and is a shared contract.
 
 **Code structure.**
-- A `RawStore` interface (`put_once`, `get`, `exists`, `list`) with `LocalRawStore` (filesystem) and `R2RawStore` (boto3). An environment variable selects the implementation.
+- A `RawStore` interface (`put_once`, `get`, `exists`, `list`) in `stemma.core.storage.raw_store`, with `LocalRawStore` (filesystem) and `R2RawStore` (boto3). `STEMMA_RAW_STORE` (`local` by default, or `r2`) selects the implementation; `r2` also reads `STEMMA_R2_ENDPOINT` and optionally `STEMMA_R2_BUCKET`.
 - One shared write-once test runs against both. `R2RawStore` tests use botocore's `Stubber`, so there is no network access.
 
 **Dependencies.**
-- `boto3` is added to `stemma-pipeline`, and as an optional `stemma-core[remote]` extra.
+- `boto3>=1.35.2` (the first release whose PutObject accepts `IfNoneMatch`) is an optional `stemma-core[remote]` extra, because `R2RawStore` lives in core. The pipeline reaches R2 through core and declares no `boto3` of its own; `make install` installs `stemma-core[remote]`. (Amended 2026-11-12 in #53; the original draft also added `boto3` to `stemma-pipeline`, which ADR-004's import test would reject.)
 - This ADR satisfies ADR-004's requirement that a new dependency have an ADR.
 
 **Credentials.**
