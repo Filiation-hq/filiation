@@ -156,3 +156,39 @@ def test_ingest_export_reports_last_updated_per_partition(tmp_path):
     # Sample: fixture index + 3-record zip. The partition result carries meta.last_updated.
     result = ingest_export("510k", LocalRawStore(tmp_path), opener=opener_for(fixture_export_zip()))
     assert result.partitions[0].last_updated == "2026-11-09"
+
+
+def test_parse_export_listing_rejects_a_source_with_no_partitions():
+    # Sample: download.json listing device/510k with an empty partitions list. Treating
+    # that as "nothing changed" would publish a manifest with no 510(k) data at all.
+    index = load_index()
+    index["results"]["device"]["510k"]["partitions"] = []
+    with pytest.raises(ValueError, match="no partitions"):
+        parse_export_listing(index, "510k")
+
+
+def test_parse_export_listing_rejects_a_partition_with_zero_records():
+    # Sample: one partition claiming 0 records. The real 510(k) export has 176,625; an
+    # empty export means openFDA published something broken.
+    index = load_index()
+    index["results"]["device"]["510k"]["partitions"][0]["records"] = 0
+    with pytest.raises(ValueError, match="0 records"):
+        parse_export_listing(index, "510k")
+
+
+def test_parse_export_listing_names_the_source_missing_from_the_index():
+    # Sample: download.json with device/510k removed (openFDA renamed or dropped it).
+    # Expect a ValueError naming the source, not a bare KeyError.
+    index = load_index()
+    del index["results"]["device"]["510k"]
+    with pytest.raises(ValueError, match="510k"):
+        parse_export_listing(index, "510k")
+
+
+def test_count_export_records_reports_a_corrupt_zip_as_an_integrity_error(tmp_path):
+    # Sample: a download cut off after 20 bytes. Expect ExportIntegrityError, the same
+    # error as every other bad export, not zipfile.BadZipFile.
+    path = tmp_path / "export.zip"
+    path.write_bytes(fixture_export_zip()[:20])
+    with pytest.raises(ExportIntegrityError):
+        count_export_records(path)

@@ -152,3 +152,20 @@ def test_ingest_openfda_cli_writes_manifest_and_prints_it(tmp_path, monkeypatch)
     assert printed["sources"][0]["objects"][0]["key"] == KEY
     assert store.exists(f"runs/{printed['run_id']}/manifest.json")
     assert json.loads((tmp_path / LATEST_KEY).read_text())["run_id"] == printed["run_id"]
+
+
+def test_ingest_openfda_cli_includes_the_github_run_attempt_in_the_run_id(tmp_path, monkeypatch):
+    # Sample: GITHUB_RUN_ID=101 and GITHUB_RUN_ATTEMPT=2, as when "Re-run jobs" repeats a
+    # run. GitHub keeps the run id on re-runs, so without the attempt the manifest key
+    # would collide with attempt 1's.
+    import stemma.pipeline.cli as cli_module
+
+    store = LocalRawStore(tmp_path)
+    monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: store)
+    monkeypatch.setattr(cli_module, "default_opener", opener_for(fixture_export_zip()))
+    env = {"GITHUB_RUN_ID": "101", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_SHA": COMMIT}
+
+    result = CliRunner().invoke(cli_module.cli, ["ingest-openfda", "--source", "510k"], env=env)
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["run_id"].endswith("_101-2")
