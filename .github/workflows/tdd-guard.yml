@@ -1,0 +1,37 @@
+name: TDD guard
+
+# #73: blocks PRs that pass CI without real TDD (AGENTS.md §9).
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  tdd-guard:
+    runs-on: ubuntu-latest
+    env:
+      PR_BODY: ${{ github.event.pull_request.body }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Scan tests and config for gaming
+        run: |
+          cp .github/scripts/check_tdd.py .github/scripts/check_pr_body.py .github/scripts/tdd_probe.py "$RUNNER_TEMP/"
+          python "$RUNNER_TEMP/check_tdd.py" static --base "$BASE_SHA" --head "$HEAD_SHA" --new-tests "$RUNNER_TEMP/new_tests.txt"
+
+      - name: New tests must fail against the base code
+        if: always()
+        run: |
+          git checkout -q "$BASE_SHA"
+          make install-dev
+          git checkout -q "$HEAD_SHA" -- tests
+          python "$RUNNER_TEMP/check_tdd.py" fail-first --new-tests "$RUNNER_TEMP/new_tests.txt"
