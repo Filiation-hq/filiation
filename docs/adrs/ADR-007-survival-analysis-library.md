@@ -1,7 +1,7 @@
 # ADR-007: Survival analysis library for packages/models
 
 **Date:** 2026-11-11
-**Status:** Proposed (drafted by DE for DS review; Alden Reagins owns the decision)
+**Status:** Proposed, deferred to Stage 2b by ADR-009 (drafted by DE for DS review; Alden Reagins owns the decision)
 **Author:** Steven Rocca (draft), Alden Reagins (decision owner)
 
 ## Decision (proposed)
