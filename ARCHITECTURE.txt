@@ -1,7 +1,7 @@
 stemma/
 ├── CONTEXT.md                    # Domain glossary (510(k) terms, recall classes, review panels)
 ├── README.md                     # Architecture overview, setup, and extraction benchmarks
-├── pyproject.toml                # Workspace definition & shared tool config (uv / ruff / pytest)
+├── pyproject.toml                # Workspace tool config (ruff / pytest); ships no code (ADR-002)
 ├── .gitignore                    # Strictly excludes data/raw/ and data/interim/
 ├── AGENTS.md                     # Operating rules for every agent (read first)
 ├── CLAUDE.md                     # Pointer to AGENTS.md for Claude Code
