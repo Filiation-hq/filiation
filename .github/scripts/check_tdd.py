@@ -120,6 +120,20 @@ def _is_trivial_assert(node: ast.Assert) -> bool:
     )
 
 
+def _is_skip_marker(decorator: ast.expr) -> bool:
+    """Reports whether a decorator disables its test: pytest.mark.skip/skipif/xfail or unittest.skip*.
+
+    Args:
+        decorator: One decorator expression, called or not.
+
+    Returns:
+        bool: True if the decorator's own name is a skip or xfail marker.
+    """
+    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+    name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
+    return name in ("skip", "skipif", "xfail") or name.startswith("skipIf") or name.startswith("skipUnless")
+
+
 def _asserting_helpers(tree: ast.Module) -> set[str]:
     """Names the module-level non-test functions that contain a real assertion.
 
@@ -149,9 +163,9 @@ def _problems(node: ast.FunctionDef, helpers: set[str]) -> list[str]:
         list[str]: Problems found; empty if the test can fail.
     """
     problems = []
-    decorators = " ".join(ast.unparse(d) for d in node.decorator_list)
     calls = [n for n in ast.walk(node) if isinstance(n, ast.Call)]
-    if "skip" in decorators or "xfail" in decorators or any(_call_name(c) in ("skip", "xfail") for c in calls):
+    skip_calls = any(_call_name(c) in ("skip", "xfail") for c in calls)
+    if any(_is_skip_marker(d) for d in node.decorator_list) or skip_calls:
         problems.append("is skipped or xfailed")
     for handler in (h for n in ast.walk(node) if isinstance(n, ast.Try) for h in n.handlers):
         caught = {getattr(t, "id", "") for t in ast.walk(handler.type)} if handler.type else {"Exception"}
