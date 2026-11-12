@@ -16,6 +16,12 @@ dependencies = [
     "pyarrow>=12.0.0",
 ]
 
+[project.optional-dependencies]
+# R2RawStore (ADR-010). 1.35.2 is the first boto3 whose PutObject accepts IfNoneMatch.
+remote = [
+    "boto3>=1.35.2",
+]
+
 [project.scripts]
 stemma-data = "stemma.core.data_loader:main"
 
