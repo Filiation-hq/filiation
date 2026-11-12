@@ -292,6 +292,7 @@ def test_r2_write_latest_puts_pointer_without_if_none_match():
             {"Bucket": BUCKET, "Key": LATEST_KEY, "Body": b'{"run_id": "102"}', "ContentType": "application/json"},
         )
         R2RawStore(BUCKET, client).write_latest(b'{"run_id": "102"}')
+        stubber.assert_no_pending_responses()
 
 
 def r2_conflict_store(stored_write_id: str) -> tuple:
