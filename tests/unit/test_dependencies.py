@@ -85,3 +85,30 @@ def test_models_declares_only_dependencies_it_imports():
     # Sample: packages/models/pyproject.toml vs imports in packages/models/src/.
     # It declares none until the survival library ADR (#9) is accepted.
     assert unused_dependencies("models") == []
+
+
+def optional_dependencies(pyproject: Path, extra: str) -> list[str]:
+    """Parses one [project.optional-dependencies] extra of a pyproject.toml without tomllib.
+
+    Args:
+        pyproject: Path to a pyproject.toml file.
+        extra: Name of the extra, e.g. "remote".
+
+    Returns:
+        list[str]: Lowercased distribution names in that extra, version specifiers stripped.
+    """
+    text = pyproject.read_text(encoding="utf-8")
+    match = re.search(rf"^{extra}\s*=\s*\[(.*?)\]", text, re.MULTILINE | re.DOTALL)
+    if not match:
+        return []
+    entries = re.findall(r'"([^"]+)"', match.group(1))
+    return [re.split(r"[<>=!~\[; ]", e, maxsplit=1)[0].lower() for e in entries]
+
+
+def test_core_remote_extra_declares_boto3_and_core_imports_it():
+    # Sample: packages/core/pyproject.toml [remote] extra vs imports in packages/core/src/.
+    # ADR-010 keeps boto3 optional so Parquet-only installs stay light, but the extra
+    # must still be backed by a real import (R2RawStore).
+    root = REPO_ROOT / "packages" / "core"
+    assert optional_dependencies(root / "pyproject.toml", "remote") == ["boto3"]
+    assert "boto3" in imported_modules(root / "src")
