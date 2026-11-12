@@ -5,14 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 import pandas as pd
-
 from stemma.core.data_loader import StemmaDataLoader
 from stemma.core.schemas.device_nodes import DeviceNode
-from stemma.core.schemas.predicate_edges import PredicateEdge
 from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
 from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler
 from stemma.pipeline.crawler.openfda_client import OpenFDAClient
@@ -33,7 +30,7 @@ def cli() -> None:
 @click.option("--limit", default=100, help="Number of records to fetch from openFDA")
 @click.option("--recalls", is_flag=True, help="Fetch recall actions instead of 510(k) clearances")
 @click.option("--output", type=click.Path(), default=None, help="Output JSON path")
-def fetch_openfda(limit: int, recalls: bool, output: Optional[str]) -> None:
+def fetch_openfda(limit: int, recalls: bool, output: str | None) -> None:
     """Fetches clearance or recall records from openFDA."""
     client = OpenFDAClient()
     if recalls:
@@ -59,7 +56,7 @@ def fetch_openfda(limit: int, recalls: bool, output: Optional[str]) -> None:
 @click.option("--size", default=500, help="Total pilot sample size across eras")
 @click.option("--input", "input_path", type=click.Path(), default=None, help="Input 510(k) records JSON")
 @click.option("--output", type=click.Path(), default=None, help="Output manifest JSON path")
-def sample_pilot(size: int, input_path: Optional[str], output: Optional[str]) -> None:
+def sample_pilot(size: int, input_path: str | None, output: str | None) -> None:
     """Generates stratified pilot sample manifest across the 5 regulatory eras."""
     client = OpenFDAClient()
     sampler = PilotSampler()
@@ -84,7 +81,7 @@ def sample_pilot(size: int, input_path: Optional[str], output: Optional[str]) ->
 @click.option("--k-number", default=None, help="Specific K-number to fetch")
 @click.option("--rate-limit", default=1.0, help="Polite delay between requests in seconds")
 @click.option("--dest", type=click.Path(), default=None, help="Destination directory for raw PDFs")
-def crawl_pdfs(manifest: Optional[str], k_number: Optional[str], rate_limit: float, dest: Optional[str]) -> None:
+def crawl_pdfs(manifest: str | None, k_number: str | None, rate_limit: float, dest: str | None) -> None:
     """Crawls 510(k) summary PDFs from FDA CDRH with rate-limiting."""
     dest_path = Path(dest) if dest else (get_raw_dir() / "pdfs")
     crawler = CDRHCrawler(dest_dir=dest_path, rate_limit_seconds=rate_limit)
@@ -116,7 +113,7 @@ def crawl_pdfs(manifest: Optional[str], k_number: Optional[str], rate_limit: flo
 @cli.command("extract")
 @click.option("--input", "input_dir", type=click.Path(), default=None, help="Directory containing raw PDFs")
 @click.option("--output", type=click.Path(), default=None, help="Output JSON path for extracted edges")
-def extract(input_dir: Optional[str], output: Optional[str]) -> None:
+def extract(input_dir: str | None, output: str | None) -> None:
     """Extracts predicate relationships from PDFs with page citations and confidence scores."""
     in_path = Path(input_dir) if input_dir else (get_raw_dir() / "pdfs")
     out_path = Path(output) if output else (get_interim_dir() / "extracted_edges.json")
@@ -142,7 +139,7 @@ def extract(input_dir: Optional[str], output: Optional[str]) -> None:
 @cli.command("export-derived")
 @click.option("--edges", type=click.Path(), default=None, help="Extracted edges JSON path")
 @click.option("--dest", type=click.Path(), default=None, help="Target releases directory")
-def export_derived(edges: Optional[str], dest: Optional[str]) -> None:
+def export_derived(edges: str | None, dest: str | None) -> None:
     """Compiles extracted edges and nodes into versioned Parquet and CSV files in data/derived/."""
     edges_file = Path(edges) if edges else (get_interim_dir() / "extracted_edges.json")
     target_dir = Path(dest) if dest else (get_derived_dir() / "releases")

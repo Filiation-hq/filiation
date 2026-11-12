@@ -2,15 +2,14 @@
 
 import hashlib
 from pathlib import Path
-from typing import Union
 
 
-def compute_sha256(file_path: Union[str, Path]) -> str:
+def compute_sha256(file_path: str | Path) -> str:
     """Computes SHA-256 hash of a file."""
     path = Path(file_path)
     if not path.is_file():
         raise FileNotFoundError(f"File not found: {path}")
-    
+
     hasher = hashlib.sha256()
     with path.open("rb") as f:
         while chunk := f.read(65536):

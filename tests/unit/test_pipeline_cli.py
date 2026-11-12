@@ -10,7 +10,6 @@ Task map:
 import json
 
 from click.testing import CliRunner
-
 from stemma.core.schemas.device_nodes import DeviceNode
 from stemma.pipeline.cli import cli
 

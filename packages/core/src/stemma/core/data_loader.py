@@ -1,19 +1,17 @@
 """Data loading and verification interface for Stemma datasets."""
 
 import json
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
-
 from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
 
 
 class StemmaDataLoader:
     """Manages access to Stemma derived and raw datasets."""
 
-    def __init__(self, repo_root: Optional[Path] = None):
+    def __init__(self, repo_root: Path | None = None):
         self.raw_dir = get_raw_dir(repo_root)
         self.interim_dir = get_interim_dir(repo_root)
         self.derived_dir = get_derived_dir(repo_root)
@@ -48,7 +46,7 @@ class StemmaDataLoader:
             return pd.read_csv(csv_path)
         raise FileNotFoundError(f"Recalls not found in {self.derived_dir / 'releases'}")
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Returns statistics on local data store."""
         raw_files = list(self.raw_dir.glob("**/*"))
         interim_files = list(self.interim_dir.glob("**/*"))

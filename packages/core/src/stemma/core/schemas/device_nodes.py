@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
@@ -14,10 +14,10 @@ class DeviceNode:
     device_name: str
     product_code: str
     decision_date: str
-    review_panel: Optional[str] = None
-    statement_or_summary: Optional[str] = "Summary"
-    expedited_review_flag: Optional[str] = None
-    third_party_flag: Optional[str] = None
+    review_panel: str | None = None
+    statement_or_summary: str | None = "Summary"
+    expedited_review_flag: str | None = None
+    third_party_flag: str | None = None
 
     def __post_init__(self) -> None:
         self.k_number = self.k_number.strip().upper()
@@ -26,9 +26,9 @@ class DeviceNode:
         if self.review_panel:
             self.review_panel = self.review_panel.strip().upper()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> DeviceNode:
+    def from_dict(cls, data: dict[str, Any]) -> DeviceNode:
         return cls(**data)
