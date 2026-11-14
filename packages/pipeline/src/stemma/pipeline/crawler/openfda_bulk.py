@@ -7,7 +7,8 @@ import io
 import json
 import tempfile
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PurePosixPath
@@ -212,43 +213,63 @@ class _JsonStream:
                     raise ExportIntegrityError(f"Malformed export JSON: {exc}") from exc
 
 
-def _count_results(stream: _JsonStream) -> ExportStats:
-    """Counts the top-level "results" array one record at a time and reads meta.last_updated.
+def _walk_export(stream: _JsonStream) -> Iterator[tuple[str, Any]]:
+    """Yields ("meta", value) and ("record", value) events from an openFDA export document.
 
     Args:
         stream: Stream positioned at the start of an openFDA export document.
 
-    Returns:
-        ExportStats: Number of records in "results" and meta.last_updated, if present.
+    Yields:
+        tuple[str, Any]: The top-level meta object, and each record in "results" in order.
 
     Raises:
         ExportIntegrityError: If the document is malformed or has no top-level "results".
     """
-    count = None
-    last_updated = None
+    seen_results = False
     stream.expect("{")
     while stream.peek() != "}":
         key = stream.value()
         stream.expect(":")
         if key == "results" and stream.peek() == "[":
+            seen_results = True
             stream.expect("[")
-            count = 0
             while stream.peek() != "]":
-                stream.value()
-                count += 1
+                yield "record", stream.value()
                 if stream.peek() == ",":
                     stream.expect(",")
             stream.expect("]")
         elif key == "meta":
-            meta = stream.value()
-            last_updated = meta.get("last_updated") if isinstance(meta, dict) else None
+            yield "meta", stream.value()
         else:
             stream.value()
         if stream.peek() == ",":
             stream.expect(",")
-    if count is None:
+    if not seen_results:
         raise ExportIntegrityError("Export JSON has no top-level 'results' array")
-    return ExportStats(count, last_updated)
+
+
+@contextmanager
+def _open_export(zip_path: Path) -> Iterator[_JsonStream]:
+    """Opens the single JSON file inside an openFDA export zip as a stream.
+
+    Args:
+        zip_path: Path to a partition zip holding exactly one JSON file.
+
+    Yields:
+        _JsonStream: Stream positioned at the start of the export document.
+
+    Raises:
+        ExportIntegrityError: If the file is not a valid zip or holds more than one entry.
+    """
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+            if len(names) != 1:
+                raise ExportIntegrityError(f"Expected one file in {zip_path.name}, found {names}")
+            with archive.open(names[0]) as raw:
+                yield _JsonStream(io.TextIOWrapper(raw, encoding="utf-8"))
+    except zipfile.BadZipFile as exc:
+        raise ExportIntegrityError(f"{zip_path.name} is not a valid zip (truncated download?)") from exc
 
 
 def read_export_stats(zip_path: Path) -> ExportStats:
@@ -263,15 +284,33 @@ def read_export_stats(zip_path: Path) -> ExportStats:
     Raises:
         ExportIntegrityError: If the zip does not hold exactly one entry or its JSON is malformed.
     """
-    try:
-        with zipfile.ZipFile(zip_path) as archive:
-            names = archive.namelist()
-            if len(names) != 1:
-                raise ExportIntegrityError(f"Expected one file in {zip_path.name}, found {names}")
-            with archive.open(names[0]) as raw:
-                return _count_results(_JsonStream(io.TextIOWrapper(raw, encoding="utf-8")))
-    except zipfile.BadZipFile as exc:
-        raise ExportIntegrityError(f"{zip_path.name} is not a valid zip (truncated download?)") from exc
+    count = 0
+    last_updated = None
+    with _open_export(zip_path) as stream:
+        for kind, value in _walk_export(stream):
+            if kind == "record":
+                count += 1
+            elif isinstance(value, dict):
+                last_updated = value.get("last_updated")
+    return ExportStats(count, last_updated)
+
+
+def iter_export_records(zip_path: Path) -> Iterator[Any]:
+    """Streams the records of an openFDA export zip one at a time, in file order.
+
+    Args:
+        zip_path: Path to a partition zip holding exactly one JSON file.
+
+    Yields:
+        Any: Each element of the file's "results" array, usually a dict.
+
+    Raises:
+        ExportIntegrityError: If the zip does not hold exactly one entry or its JSON is malformed.
+    """
+    with _open_export(zip_path) as stream:
+        for kind, value in _walk_export(stream):
+            if kind == "record":
+                yield value
 
 
 def count_export_records(zip_path: Path) -> int:
