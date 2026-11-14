@@ -56,6 +56,44 @@ class ManifestObject:
 
 
 @dataclass(frozen=True)
+class SourceDiff:
+    """How one source's export differs from the previous run's: records added, removed, and amended."""
+
+    previous_run_id: str
+    previous_export_date: str | None
+    added: int
+    removed: int
+    amended: int
+    changed_fields: dict[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validates the counts and stores changed_fields in field-name order.
+
+        Raises:
+            ValueError: If a count is negative, amended and changed_fields disagree about
+                whether anything was amended, a field count is outside 1..amended, or
+                previous_export_date is not YYYY-MM-DD.
+        """
+        if min(self.added, self.removed, self.amended) < 0:
+            raise ValueError(f"diff counts must be >= 0, got {self.added}/{self.removed}/{self.amended}")
+        if bool(self.amended) != bool(self.changed_fields):
+            raise ValueError(f"{self.amended} amended records but changed_fields {self.changed_fields!r}")
+        if bad := {k: n for k, n in self.changed_fields.items() if not 1 <= n <= self.amended}:
+            raise ValueError(f"changed_fields counts {bad} must be between 1 and amended={self.amended}")
+        if self.previous_export_date is not None:
+            _check_iso_date(self.previous_export_date, "previous_export_date")
+        object.__setattr__(self, "changed_fields", dict(sorted(self.changed_fields.items())))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Converts the diff to plain JSON-ready data.
+
+        Returns:
+            dict[str, Any]: The diff's fields.
+        """
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class SourceSnapshot:
     """Everything one source contributed to a run, as of its openFDA export_date."""
 
@@ -64,6 +102,7 @@ class SourceSnapshot:
     objects: list[ManifestObject] = field(default_factory=list)
     export_date: str | None = None
     last_updated: str | None = None
+    diff: SourceDiff | None = None
 
     def __post_init__(self) -> None:
         """Validates the status, export_date, and openFDA's meta.last_updated.
@@ -156,6 +195,7 @@ class RunManifest:
                 export_date=s.get("export_date"),
                 last_updated=s.get("last_updated"),
                 objects=[ManifestObject(**o) for o in s["objects"]],
+                diff=SourceDiff(**s["diff"]) if s.get("diff") else None,
             )
             for s in data["sources"]
         ]
