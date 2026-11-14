@@ -10,6 +10,17 @@ Task map:
         a run id that was already used.
     Invariants: latest.json moves only after its manifest is written; a failed run leaves
         latest.json where it was; manifests are never overwritten.
+
+Weekly diff (#40):
+    Input: the manifest latest.json names when the run starts, and the objects both runs
+        list for each source.
+    Output: each source's SourceDiff (added/removed/amended against that manifest) in the
+        new manifest; None when there is nothing to compare against.
+    Edge cases: the first run (no latest.json); a source the previous run didn't ingest; an
+        unchanged export (zero diff, nothing downloaded); a previous object whose bytes no
+        longer match its manifest; latest.json naming a manifest that is gone; a diff that
+        fails partway.
+    Invariants: a run whose diff fails writes no manifest and leaves latest.json in place.
 """
 
 import hashlib
@@ -18,7 +29,7 @@ from datetime import datetime, timezone
 
 import pytest
 from click.testing import CliRunner
-from openfda_fakes import KEY, fixture_export_zip, load_index, opener_for
+from openfda_fakes import FIXTURES, KEY, fixture_export_zip, load_index, make_export_zip, opener_for
 from stemma.core.schemas.run_manifest import RunManifest
 from stemma.core.storage.raw_store import LATEST_KEY, KeyExistsError, LocalRawStore
 from stemma.pipeline.crawler.ingestion_run import run_ingestion
@@ -169,3 +180,170 @@ def test_ingest_openfda_cli_includes_the_github_run_attempt_in_the_run_id(tmp_pa
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["run_id"].endswith("_101-2")
+
+
+def next_week():
+    """Returns a fresh clock for a run a week after run 101.
+
+    Returns:
+        Callable[[], datetime]: 2026-11-23 06:00:00, then 06:00:30 UTC.
+    """
+    return fixed_clock("2026-11-23T06:00:00", "2026-11-23T06:00:30")
+
+
+def next_week_opener(records: list[dict]):
+    """Serves a 510(k) export dated 2026-11-16 holding the given records.
+
+    Args:
+        records: Records for the new export's "results" array.
+
+    Returns:
+        FakeOpener: Opener whose index lists one partition with len(records) records.
+    """
+    index = load_index()
+    entry = index["results"]["device"]["510k"]
+    entry["export_date"] = "2026-11-16"
+    entry["partitions"][0]["records"] = len(records)
+    body = json.dumps({"meta": {"last_updated": "2026-11-16"}, "results": records})
+    return opener_for(make_export_zip({"device-510k-0001-of-0001.json": body}), index)
+
+
+def fixture_records() -> list[dict]:
+    """Loads the 3 records of the 510(k) fixture export.
+
+    Returns:
+        list[dict]: K210758, K030123, and K882211.
+    """
+    return json.loads((FIXTURES / "device-510k-0001-of-0001.json").read_text())["results"]
+
+
+class CountingStore(LocalRawStore):
+    """LocalRawStore that records every key fetched with get()."""
+
+    def __init__(self, root):
+        """Creates the store.
+
+        Args:
+            root: Directory holding the objects.
+        """
+        super().__init__(root)
+        self.fetched: list[str] = []
+
+    def get(self, key, dest):
+        """Records key, then copies the object to dest.
+
+        Args:
+            key: Object key to fetch.
+            dest: Local file path to write.
+
+        Returns:
+            Path: dest.
+        """
+        self.fetched.append(key)
+        return super().get(key, dest)
+
+
+def test_first_run_records_no_diff_because_there_is_no_previous_snapshot(tmp_path):
+    # Sample: empty store, fixture export. With no latest.json there is nothing to diff
+    # against, so the 510(k) snapshot's diff is None (a baseline), not "3 added".
+    manifest = run(LocalRawStore(tmp_path))
+    assert manifest.sources[0].diff is None
+
+
+def test_run_diffs_each_source_against_the_snapshot_latest_json_named(tmp_path):
+    # Sample: run 101 stores the 3-record fixture (export 2026-11-09). A week later openFDA
+    # publishes export 2026-11-16: K882211 gone, K251234 new, K210758's decision_date
+    # corrected. Run 102's manifest must record 1 added, 1 removed, 1 amended vs run 101.
+    store = LocalRawStore(tmp_path)
+    run(store)
+    stryker, catheter, _ = fixture_records()
+    new = {"k_number": "K251234", "applicant": "New Co", "product_code": "MRN", "decision_date": "2025-10-01"}
+    records = [{**stryker, "decision_date": "2021-04-16"}, catheter, new]
+
+    manifest = run(store, run_suffix="102", opener=next_week_opener(records), clock=next_week())
+
+    diff = manifest.sources[0].diff
+    assert (diff.previous_run_id, diff.previous_export_date) == ("2026-11-16_101", "2026-11-09")
+    assert (diff.added, diff.removed, diff.amended) == (1, 1, 1)
+    assert diff.changed_fields == {"decision_date": 1}
+    written = RunManifest.from_dict(json.loads((tmp_path / "runs/2026-11-23_102/manifest.json").read_text()))
+    assert written.sources[0].diff == diff
+
+
+def test_run_records_a_zero_diff_without_downloading_when_the_export_is_unchanged(tmp_path):
+    # Sample: runs 101 and 102 see the same 2026-11-09 export. Both manifests list the same
+    # SHA-256, so the diff is all zeros and neither copy is fetched to compare records.
+    store = CountingStore(tmp_path)
+    run(store)
+    store.fetched.clear()
+
+    manifest = run(store, run_suffix="102", clock=next_week())
+
+    diff = manifest.sources[0].diff
+    assert (diff.previous_run_id, diff.added, diff.removed, diff.amended) == ("2026-11-16_101", 0, 0, 0)
+    # ingest_export fetches KEY once to confirm the re-published bytes match; nothing more.
+    assert [key for key in store.fetched if key.endswith(".zip")] == [KEY]
+
+
+def test_run_records_no_diff_for_a_source_the_previous_run_did_not_ingest(tmp_path):
+    # Sample: run 101 ingests 510(k) only; run 102 adds recall. Recall has no previous
+    # snapshot to compare with, so its diff is None while 510(k) gets a zero diff.
+    store = LocalRawStore(tmp_path)
+    run(store)
+    manifest = run_ingestion(
+        ["510k", "recall"],
+        store,
+        run_suffix="102",
+        commit_sha=COMMIT,
+        writer="github-actions",
+        opener=opener_for(fixture_export_zip()),
+        clock=next_week(),
+    )
+    diffs = {s.source: s.diff for s in manifest.sources}
+    assert diffs["recall"] is None
+    assert diffs["510k"].amended == 0
+
+
+def test_run_fails_without_a_manifest_when_a_previous_object_no_longer_matches_its_hash(tmp_path):
+    # Sample: after run 101, the stored 2026-11-09 zip is replaced on disk by different
+    # bytes (bit rot or a bad copy). Run 102 must refuse to diff against it, write no
+    # manifest, and leave latest.json on run 101.
+    store = LocalRawStore(tmp_path)
+    run(store)
+    (tmp_path / KEY).write_bytes(make_export_zip({"device-510k-0001-of-0001.json": '{"results": []}'}))
+    stryker, catheter, _ = fixture_records()
+
+    with pytest.raises(ExportIntegrityError):
+        run(store, run_suffix="102", opener=next_week_opener([stryker, catheter]), clock=next_week())
+
+    assert not store.exists("runs/2026-11-23_102/manifest.json")
+    assert json.loads((tmp_path / LATEST_KEY).read_text())["manifest_key"] == MANIFEST_KEY
+
+
+def test_run_fails_without_a_manifest_when_the_new_export_repeats_a_key(tmp_path):
+    # Sample: next week's export lists K210758 twice. The diff can't say which copy is
+    # current, so the run stops before writing a manifest; latest.json stays on run 101.
+    store = LocalRawStore(tmp_path)
+    run(store)
+    stryker, catheter, _ = fixture_records()
+
+    with pytest.raises(ExportIntegrityError):
+        run(store, run_suffix="102", opener=next_week_opener([stryker, catheter, stryker]), clock=next_week())
+
+    assert not store.exists("runs/2026-11-23_102/manifest.json")
+    assert json.loads((tmp_path / LATEST_KEY).read_text())["manifest_key"] == MANIFEST_KEY
+
+
+def test_run_fails_before_downloading_when_latest_json_names_a_missing_manifest(tmp_path):
+    # Sample: latest.json points at runs/2026-11-09_99/manifest.json, which was never
+    # written. Diffing against "nothing" would report every record as added, so the run
+    # must stop and fetch nothing from openFDA.
+    store = LocalRawStore(tmp_path)
+    store.write_latest(b'{"manifest_key": "runs/2026-11-09_99/manifest.json", "run_id": "2026-11-09_99", '
+                       b'"updated_at": "2026-11-09T06:00:00Z"}')
+    opener = opener_for(fixture_export_zip())
+
+    with pytest.raises(FileNotFoundError):
+        run(store, opener=opener)
+
+    assert opener.calls == []
