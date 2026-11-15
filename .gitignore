@@ -68,3 +68,7 @@ htmlcov/
 # Private Plans
 BUILDINPUBLIC.md
 VMCONFIG.md
+
+# Local research output (deep-research notes and reports)
+research_notes/
+reports/
