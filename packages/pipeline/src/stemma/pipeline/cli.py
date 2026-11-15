@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -15,7 +16,8 @@ from stemma.core.data_loader import StemmaDataLoader
 from stemma.core.schemas.device_nodes import DeviceNode
 from stemma.core.storage.raw_store import raw_store_from_env
 from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
-from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler
+from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler, CrawlTarget
+from stemma.pipeline.crawler.cdrh_crawler import default_opener as cdrh_opener
 from stemma.pipeline.crawler.ingestion_run import run_ingestion
 from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener
 from stemma.pipeline.crawler.openfda_client import OpenFDAClient
@@ -24,6 +26,7 @@ from stemma.pipeline.extraction.parser import SummaryParser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("stemma.pipeline")
+crawl_sleep = time.sleep
 
 
 @click.group()
@@ -146,37 +149,29 @@ def sample_pilot(size: int, input_path: str | None, output: str | None) -> None:
 
 
 @cli.command("crawl-pdfs")
-@click.option("--manifest", type=click.Path(), default=None, help="Pilot manifest JSON path")
+@click.option("--manifest", type=click.Path(exists=True, dir_okay=False), default=None, help="Pilot manifest JSON path")
 @click.option("--k-number", default=None, help="Specific K-number to fetch")
-@click.option("--rate-limit", default=1.0, help="Polite delay between requests in seconds")
-@click.option("--dest", type=click.Path(), default=None, help="Destination directory for raw PDFs")
-def crawl_pdfs(manifest: str | None, k_number: str | None, rate_limit: float, dest: str | None) -> None:
-    """Crawls 510(k) summary PDFs from FDA CDRH with rate-limiting."""
-    dest_path = Path(dest) if dest else (get_raw_dir() / "pdfs")
-    crawler = CDRHCrawler(dest_dir=dest_path, rate_limit_seconds=rate_limit)
-
-    targets = []
+@click.option("--rate-limit", default=1.0, help="Seconds between requests; at least 1.0")
+def crawl_pdfs(manifest: str | None, k_number: str | None, rate_limit: float) -> None:
+    """Crawls 510(k) summary PDFs into the raw store, resuming from what earlier crawls stored."""
     if k_number:
-        targets.append(k_number)
-    elif manifest and Path(manifest).exists():
-        with open(manifest, encoding="utf-8") as f:
-            items = json.load(f)
-        targets = [item["k_number"] for item in items if "k_number" in item]
+        targets = [CrawlTarget(k_number)]
+    elif manifest:
+        items = json.loads(Path(manifest).read_text(encoding="utf-8"))
+        targets = [CrawlTarget(item["k_number"], item.get("decision_date")) for item in items if "k_number" in item]
     else:
-        logger.error("Must provide either --k-number or --manifest")
-        return
+        raise click.UsageError("Provide --k-number or --manifest")
+    try:
+        crawler = CDRHCrawler(raw_store_from_env(), opener=cdrh_opener, sleep=crawl_sleep, min_interval=rate_limit)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--rate-limit") from exc
 
-    logger.info("Beginning polite crawl for %d device summaries (rate limit: %.1fs)...", len(targets), rate_limit)
-    success = 0
-    for k in targets:
-        res = crawler.fetch_pdf(k)
-        if res.get("status") in ("DOWNLOADED", "CACHED"):
-            success += 1
-            logger.info("[%s] %s -> %s", res["status"], k, res.get("path"))
-        else:
-            logger.warning("[FAILED] %s: %s", k, res.get("error"))
-
-    logger.info("Crawl complete. Successfully fetched/cached: %d/%d", success, len(targets))
+    logger.info("Crawling %d summaries at one request per %.1fs...", len(targets), rate_limit)
+    report = crawler.crawl(targets)
+    click.echo(json.dumps({"counts": report.counts, "outcomes": report.outcomes}, indent=2))
+    # Errors are transient (5xx, 429, network); a rerun resumes and retries only those.
+    if report.counts.get("error"):
+        sys.exit(1)
 
 
 @cli.command("extract")
