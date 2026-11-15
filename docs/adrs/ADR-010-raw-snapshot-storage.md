@@ -43,13 +43,13 @@ The total size of the CDRH PDF history is **unknown**. A guess of about 100k sum
 openfda/510k/export_date=<YYYY-MM-DD>/<openFDA file name>.json.zip
 openfda/recall/export_date=<YYYY-MM-DD>/<openFDA file name>.json.zip
 cdrh/pdfs/<K-number>/<sha256>.pdf
-cdrh/missing/<K-number>/<YYYY-MM-DD>.json
+cdrh/missing/<K-number>/<YYYY-MM-DD>_<url-fingerprint>.json
 runs/<YYYY-MM-DD>_<run-id>/manifest.json
 latest.json
 ```
 - JSON exports are partitioned by openFDA's `export_date`, so a week with no change creates no new object.
 - PDFs are keyed by K-number and content hash, so a re-posted PDF becomes a new version and nothing is copied per run.
-- A missing marker records the date a K-number's PDF returned 404 at every candidate URL (#43). The crawl state lives only in the store: a K-number with a PDF is done, and one with a marker is checked again 30 days later if decided within the last year, or 365 days later otherwise. So a crawl resumes on any machine.
+- A missing marker records the UTC date a K-number's PDF returned 404 at every candidate URL (#43, #86). Its key ends in a 12-hex fingerprint of the exact URLs tried (#85), so a marker covers only those URLs. If the crawler's URL patterns change, as when #83 fixed `pdf03/` to `pdf3/`, old markers stop suppressing requests, and the listing alone shows this without reading any marker. The crawl state lives only in the store: a K-number with a PDF is done, and one with a marker is checked again 30 days later if decided within the last year, or 365 days later otherwise. So a crawl resumes on any machine.
 - A run's manifest lists every object in the run (key, SHA-256, size, record count where applicable), plus `export_date`, commit SHA, and run ID (#42).
 
 **Immutability.**
