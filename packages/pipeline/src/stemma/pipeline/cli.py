@@ -175,21 +175,21 @@ def crawl_pdfs(manifest: str | None, k_number: str | None, rate_limit: float) ->
 
 
 @cli.command("extract")
-@click.option("--input", "input_dir", type=click.Path(), default=None, help="Directory containing raw PDFs")
+@click.option("--input", "input_dir", type=click.Path(), default=None, help="PDF directory laid out as <K-number>/<sha256>.pdf")
 @click.option("--output", type=click.Path(), default=None, help="Output JSON path for extracted edges")
 def extract(input_dir: str | None, output: str | None) -> None:
     """Extracts predicate relationships from PDFs with page citations and confidence scores."""
-    in_path = Path(input_dir) if input_dir else (get_raw_dir() / "pdfs")
+    in_path = Path(input_dir) if input_dir else (get_raw_dir() / "cdrh" / "pdfs")
     out_path = Path(output) if output else (get_interim_dir() / "extracted_edges.json")
 
-    pdf_files = list(in_path.glob("*.pdf"))
+    pdf_files = sorted(in_path.glob("*/*.pdf"))
     logger.info("Found %d PDFs in %s. Running extraction parser...", len(pdf_files), in_path)
 
     parser = SummaryParser()
     all_edges = []
 
     for pdf in pdf_files:
-        edges = parser.parse_pdf(pdf)
+        edges = parser.parse_pdf(pdf, subject_k=pdf.parent.name)
         for e in edges:
             all_edges.append(e.to_dict())
 
