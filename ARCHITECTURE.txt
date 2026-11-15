@@ -39,7 +39,7 @@ stemma/
 │   │
 │   ├── pipeline/                 # stemma-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
 │   │   ├── src/stemma/pipeline/
-│   │   │   ├── crawler/          # openFDA bulk-export ingester, ingestion run + manifest, API client, CDRH PDF crawler, stratified pilot sampler
+│   │   │   ├── crawler/          # openFDA bulk-export ingester, ingestion run + manifest, API client, resumable CDRH PDF crawler, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (MAUDE planned)
