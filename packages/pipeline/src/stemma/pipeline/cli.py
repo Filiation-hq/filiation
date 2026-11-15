@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -21,6 +24,7 @@ from stemma.pipeline.crawler.cdrh_crawler import default_opener as cdrh_opener
 from stemma.pipeline.crawler.ingestion_run import run_ingestion
 from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener
 from stemma.pipeline.crawler.openfda_client import OpenFDAClient
+from stemma.pipeline.crawler.pdf_backfill import BackfillError, run_backfill
 from stemma.pipeline.crawler.sampler import ERAS, PilotSampler, collect_pilot_pool
 from stemma.pipeline.extraction.parser import SummaryParser
 
@@ -78,6 +82,67 @@ def _head_commit() -> str:
         raise click.UsageError("Pass --commit-sha; git rev-parse HEAD failed") from exc
 
 
+def _run_identity(
+    run_id: str | None, run_attempt: str | None, commit_sha: str | None, writer: str | None
+) -> tuple[str, str, str]:
+    """Resolves a run's id suffix, commit, and writer from options, GitHub Actions, or local defaults.
+
+    Args:
+        run_id: Run id suffix, e.g. GITHUB_RUN_ID.
+        run_attempt: Re-run attempt, e.g. GITHUB_RUN_ATTEMPT.
+        commit_sha: Commit of the code that runs; defaults to git HEAD.
+        writer: "github-actions", "oracle-vm", or "local"; defaults by environment.
+
+    Returns:
+        tuple[str, str, str]: The run suffix, commit SHA, and writer.
+
+    Raises:
+        click.UsageError: If no commit was given and git rev-parse HEAD fails.
+    """
+    in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
+    # GitHub keeps GITHUB_RUN_ID on "Re-run jobs"; the attempt keeps manifest keys unique.
+    suffix = f"{run_id}-{run_attempt}" if run_id and run_attempt else run_id
+    return (
+        suffix or f"local-{int(time.time())}",
+        commit_sha or _head_commit(),
+        writer or ("github-actions" if in_actions else "local"),
+    )
+
+
+run_id_option = click.option("--run-id", envvar="GITHUB_RUN_ID", default=None, help="Run id suffix [env: GITHUB_RUN_ID]")
+run_attempt_option = click.option(
+    "--run-attempt",
+    envvar="GITHUB_RUN_ATTEMPT",
+    default=None,
+    help="Re-run attempt, appended to the run id [env: GITHUB_RUN_ATTEMPT]",
+)
+commit_option = click.option("--commit-sha", envvar="GITHUB_SHA", default=None, help="Code commit [env: GITHUB_SHA]")
+writer_option = click.option(
+    "--writer",
+    type=click.Choice(["github-actions", "oracle-vm", "local"]),
+    default=None,
+    help="Who is writing; defaults to github-actions under Actions, else local",
+)
+
+
+@contextmanager
+def _sigterm_as_exit() -> Iterator[None]:
+    """Turns SIGTERM into SystemExit(143) while active, so cleanup in finally blocks still runs.
+
+    Yields:
+        None: Control to the guarded block; the previous handler is restored afterwards.
+    """
+
+    def handler(signum: int, frame: object) -> None:
+        raise SystemExit(128 + signum)
+
+    previous = signal.signal(signal.SIGTERM, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
 @cli.command("ingest-openfda")
 @click.option(
     "--source",
@@ -88,20 +153,10 @@ def _head_commit() -> str:
     show_default=True,
     help="openFDA export(s) to ingest; repeat for several",
 )
-@click.option("--run-id", envvar="GITHUB_RUN_ID", default=None, help="Run id suffix [env: GITHUB_RUN_ID]")
-@click.option(
-    "--run-attempt",
-    envvar="GITHUB_RUN_ATTEMPT",
-    default=None,
-    help="Re-run attempt, appended to the run id [env: GITHUB_RUN_ATTEMPT]",
-)
-@click.option("--commit-sha", envvar="GITHUB_SHA", default=None, help="Code commit [env: GITHUB_SHA]")
-@click.option(
-    "--writer",
-    type=click.Choice(["github-actions", "oracle-vm", "local"]),
-    default=None,
-    help="Who is writing; defaults to github-actions under Actions, else local",
-)
+@run_id_option
+@run_attempt_option
+@commit_option
+@writer_option
 def ingest_openfda(
     sources: tuple[str, ...],
     run_id: str | None,
@@ -110,16 +165,9 @@ def ingest_openfda(
     writer: str | None,
 ) -> None:
     """Stores the current openFDA exports write-once and records the run in a manifest."""
-    in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
-    # GitHub keeps GITHUB_RUN_ID on "Re-run jobs"; the attempt keeps manifest keys unique.
-    suffix = f"{run_id}-{run_attempt}" if run_id and run_attempt else run_id
+    suffix, commit, who = _run_identity(run_id, run_attempt, commit_sha, writer)
     manifest = run_ingestion(
-        list(sources),
-        raw_store_from_env(),
-        run_suffix=suffix or f"local-{int(time.time())}",
-        commit_sha=commit_sha or _head_commit(),
-        writer=writer or ("github-actions" if in_actions else "local"),
-        opener=default_opener,
+        list(sources), raw_store_from_env(), run_suffix=suffix, commit_sha=commit, writer=who, opener=default_opener
     )
     click.echo(manifest.to_json().decode("utf-8"))
 
@@ -156,8 +204,31 @@ def sample_pilot(size: int, input_path: str | None, output: str | None) -> None:
 @click.option("--manifest", type=click.Path(exists=True, dir_okay=False), default=None, help="Pilot manifest JSON path")
 @click.option("--k-number", default=None, help="Specific K-number to fetch")
 @click.option("--rate-limit", default=1.0, help="Seconds between requests; at least 1.0")
-def crawl_pdfs(manifest: str | None, k_number: str | None, rate_limit: float) -> None:
+@click.option(
+    "--from-latest",
+    is_flag=True,
+    help="Crawl every Summary or blank record in the 510(k) snapshot latest.json names, and write an audit manifest",
+)
+@run_id_option
+@run_attempt_option
+@commit_option
+@writer_option
+def crawl_pdfs(
+    manifest: str | None,
+    k_number: str | None,
+    rate_limit: float,
+    from_latest: bool,
+    run_id: str | None,
+    run_attempt: str | None,
+    commit_sha: str | None,
+    writer: str | None,
+) -> None:
     """Crawls 510(k) summary PDFs into the raw store, resuming from what earlier crawls stored."""
+    if from_latest and (manifest or k_number):
+        raise click.UsageError("--from-latest can't be combined with --manifest or --k-number")
+    if from_latest:
+        _backfill_from_latest(rate_limit, _run_identity(run_id, run_attempt, commit_sha, writer))
+        return
     if k_number:
         targets = [CrawlTarget(k_number)]
     elif manifest:
@@ -165,16 +236,55 @@ def crawl_pdfs(manifest: str | None, k_number: str | None, rate_limit: float) ->
         targets = [CrawlTarget(item["k_number"], item.get("decision_date")) for item in items if "k_number" in item]
     else:
         raise click.UsageError("Provide --k-number or --manifest")
-    try:
-        crawler = CDRHCrawler(raw_store_from_env(), opener=cdrh_opener, sleep=crawl_sleep, min_interval=rate_limit)
-    except ValueError as exc:
-        raise click.BadParameter(str(exc), param_hint="--rate-limit") from exc
-
+    crawler = _crawler(rate_limit)
     logger.info("Crawling %d summaries at one request per %.1fs...", len(targets), rate_limit)
     report = crawler.crawl(targets)
     click.echo(json.dumps({"counts": report.counts, "outcomes": report.outcomes}, indent=2))
     # Errors are transient (5xx, 429, network); a rerun resumes and retries only those.
     if report.counts.get("error"):
+        sys.exit(1)
+
+
+def _crawler(rate_limit: float) -> CDRHCrawler:
+    """Builds the CDRH crawler for the configured raw store.
+
+    Args:
+        rate_limit: Seconds between request starts.
+
+    Returns:
+        CDRHCrawler: Crawler bound to raw_store_from_env().
+
+    Raises:
+        click.BadParameter: If rate_limit is below the crawler's minimum.
+    """
+    try:
+        return CDRHCrawler(raw_store_from_env(), opener=cdrh_opener, sleep=crawl_sleep, min_interval=rate_limit)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--rate-limit") from exc
+
+
+def _backfill_from_latest(rate_limit: float, identity: tuple[str, str, str]) -> None:
+    """Runs the backfill for the latest 510(k) snapshot, prints its summary, and exits 1 on errors.
+
+    Args:
+        rate_limit: Seconds between request starts.
+        identity: Run suffix, commit SHA, and writer from _run_identity.
+
+    Raises:
+        click.ClickException: If the store has no 510(k) snapshot to take targets from.
+    """
+    suffix, commit, who = identity
+    crawler = _crawler(rate_limit)
+    try:
+        with _sigterm_as_exit():
+            manifest, report = run_backfill(crawler, run_suffix=suffix, commit_sha=commit, writer=who)
+    except BackfillError as exc:
+        raise click.ClickException(str(exc)) from exc
+    errors = sorted(k for k, outcome in report.outcomes.items() if outcome == "error")
+    [source] = manifest.sources
+    summary = {"manifest_key": manifest.manifest_key, "targets_from": source.targets_from, "counts": report.counts, "errors": errors}
+    click.echo(json.dumps(summary, indent=2))
+    if errors:
         sys.exit(1)
 
 
