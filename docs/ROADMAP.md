@@ -2,7 +2,7 @@
 
 Each stage is a GitHub milestone. A stage begins only once the previous stage's exit criteria are met; dates never decide this (ADR-009). Until Stage 2b, data science work is analysis only: profiling, labeling, accuracy measurement, and descriptive statistics, with no model training.
 
-Ingestion stays batch at every stage (ADR-008).
+Ingestion stays batch at every stage (ADR-008). A stage also exits only when every factor in `docs/bias-register.md` that blocks it is handled or measured.
 
 | Stage | Goal | Steven (DE) | Alden (DS) | Exit criteria |
 |---|---|---|---|---|
