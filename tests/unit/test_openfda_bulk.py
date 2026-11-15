@@ -16,13 +16,17 @@ Task map:
 """
 
 import hashlib
-import io
-import json
-import zipfile
-from pathlib import Path
 
 import pytest
-from click.testing import CliRunner
+from openfda_fakes import (
+    FIXTURES,
+    KEY,
+    PARTITION_URL,
+    fixture_export_zip,
+    load_index,
+    make_export_zip,
+    opener_for,
+)
 from stemma.core.storage.raw_store import LocalRawStore
 from stemma.pipeline.crawler.openfda_bulk import (
     DOWNLOAD_INDEX_URL,
@@ -31,85 +35,8 @@ from stemma.pipeline.crawler.openfda_bulk import (
     count_export_records,
     ingest_export,
     parse_export_listing,
+    read_export_stats,
 )
-
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "openfda"
-PARTITION_URL = "https://download.open.fda.gov/device/510k/device-510k-0001-of-0001.json.zip"
-KEY = "openfda/510k/export_date=2026-11-09/device-510k-0001-of-0001.json.zip"
-
-
-def load_index() -> dict:
-    """Loads the trimmed download.json fixture.
-
-    Returns:
-        dict: Parsed index with device/510k (3 records) and device/recall (2 records).
-    """
-    return json.loads((FIXTURES / "download.json").read_text(encoding="utf-8"))
-
-
-def make_export_zip(entries: dict[str, bytes]) -> bytes:
-    """Builds an in-memory zip with the given entries, like openFDA's partition zips.
-
-    Args:
-        entries: Mapping of entry name to its uncompressed bytes.
-
-    Returns:
-        bytes: The zip archive.
-    """
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, data in entries.items():
-            archive.writestr(name, data)
-    return buffer.getvalue()
-
-
-def fixture_export_zip() -> bytes:
-    """Zips the 3-record 510(k) export fixture under openFDA's inner file name.
-
-    Returns:
-        bytes: Zip bytes for device-510k-0001-of-0001.json.zip.
-    """
-    body = (FIXTURES / "device-510k-0001-of-0001.json").read_bytes()
-    return make_export_zip({"device-510k-0001-of-0001.json": body})
-
-
-class FakeOpener:
-    """Serves fixed bytes per URL and records every URL requested."""
-
-    def __init__(self, responses: dict[str, bytes]) -> None:
-        """Stores the URL-to-bytes map.
-
-        Args:
-            responses: Bytes to return for each URL; any other URL raises KeyError.
-        """
-        self.responses = responses
-        self.calls: list[str] = []
-
-    def __call__(self, url: str) -> io.BytesIO:
-        """Returns a readable stream for url.
-
-        Args:
-            url: Requested URL.
-
-        Returns:
-            io.BytesIO: Stream over the configured bytes.
-        """
-        self.calls.append(url)
-        return io.BytesIO(self.responses[url])
-
-
-def opener_for(zip_bytes: bytes, index: dict | None = None) -> FakeOpener:
-    """Builds a FakeOpener serving the index and one 510(k) partition zip.
-
-    Args:
-        zip_bytes: Bytes served at PARTITION_URL.
-        index: Index to serve; defaults to the download.json fixture.
-
-    Returns:
-        FakeOpener: Opener for DOWNLOAD_INDEX_URL and PARTITION_URL only.
-    """
-    index_bytes = json.dumps(index or load_index()).encode("utf-8")
-    return FakeOpener({DOWNLOAD_INDEX_URL: index_bytes, PARTITION_URL: zip_bytes})
 
 
 def test_parse_export_listing_reads_export_date_and_partitions_for_510k():
@@ -215,20 +142,53 @@ def test_ingest_export_raises_conflict_when_same_export_date_has_different_bytes
     assert (tmp_path / "raw" / KEY).read_bytes() == fixture_export_zip()
 
 
-def test_ingest_openfda_cli_stores_export_and_prints_result_json(tmp_path, monkeypatch):
-    # Sample: `stemma-pipeline ingest-openfda --source 510k` with the store and opener
-    # patched to a temp LocalRawStore and the fixture opener. Expect exit 0 and a JSON
-    # summary naming the stored key.
-    import stemma.pipeline.cli as cli_module
 
-    store = LocalRawStore(tmp_path / "raw")
-    monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: store)
-    monkeypatch.setattr(cli_module, "default_opener", opener_for(fixture_export_zip()))
+def test_read_export_stats_returns_count_and_openfda_last_updated(tmp_path):
+    # Sample: the 3-record fixture, whose meta.last_updated is 2026-11-09. ADR-008 logs
+    # last_updated on every run to measure openFDA's real refresh cadence.
+    path = tmp_path / "export.zip"
+    path.write_bytes(fixture_export_zip())
+    stats = read_export_stats(path)
+    assert (stats.records, stats.last_updated) == (3, "2026-11-09")
 
-    result = CliRunner().invoke(cli_module.cli, ["ingest-openfda", "--source", "510k"])
 
-    assert result.exit_code == 0, result.output
-    summary = json.loads(result.output)
-    assert summary["partitions"][0]["key"] == KEY
-    assert summary["partitions"][0]["status"] == "stored"
+def test_ingest_export_reports_last_updated_per_partition(tmp_path):
+    # Sample: fixture index + 3-record zip. The partition result carries meta.last_updated.
+    result = ingest_export("510k", LocalRawStore(tmp_path), opener=opener_for(fixture_export_zip()))
+    assert result.partitions[0].last_updated == "2026-11-09"
 
+
+def test_parse_export_listing_rejects_a_source_with_no_partitions():
+    # Sample: download.json listing device/510k with an empty partitions list. Treating
+    # that as "nothing changed" would publish a manifest with no 510(k) data at all.
+    index = load_index()
+    index["results"]["device"]["510k"]["partitions"] = []
+    with pytest.raises(ValueError, match="no partitions"):
+        parse_export_listing(index, "510k")
+
+
+def test_parse_export_listing_rejects_a_partition_with_zero_records():
+    # Sample: one partition claiming 0 records. The real 510(k) export has 176,625; an
+    # empty export means openFDA published something broken.
+    index = load_index()
+    index["results"]["device"]["510k"]["partitions"][0]["records"] = 0
+    with pytest.raises(ValueError, match="0 records"):
+        parse_export_listing(index, "510k")
+
+
+def test_parse_export_listing_names_the_source_missing_from_the_index():
+    # Sample: download.json with device/510k removed (openFDA renamed or dropped it).
+    # Expect a ValueError naming the source, not a bare KeyError.
+    index = load_index()
+    del index["results"]["device"]["510k"]
+    with pytest.raises(ValueError, match="510k"):
+        parse_export_listing(index, "510k")
+
+
+def test_count_export_records_reports_a_corrupt_zip_as_an_integrity_error(tmp_path):
+    # Sample: a download cut off after 20 bytes. Expect ExportIntegrityError, the same
+    # error as every other bad export, not zipfile.BadZipFile.
+    path = tmp_path / "export.zip"
+    path.write_bytes(fixture_export_zip()[:20])
+    with pytest.raises(ExportIntegrityError):
+        count_export_records(path)

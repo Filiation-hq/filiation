@@ -29,7 +29,7 @@ stemma/
 ├── packages/                     # One installable package per ownership boundary (ADR-002)
 │   ├── core/                     # stemma-core: shared data contracts and utilities
 │   │   ├── src/stemma/core/
-│   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls; DuckDB DDL strings
+│   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls, run_manifest; DuckDB DDL strings
 │   │   │   ├── storage/          # raw_store.py: write-once RawStore, local (data/raw/) and R2 backends (ADR-010)
 │   │   │   ├── utils/            # hashing.py, paths.py (repo-root & data-tier resolution)
 │   │   │   └── data_loader.py    # Loads derived Parquet; `stemma-data` entrypoint
@@ -37,7 +37,7 @@ stemma/
 │   │
 │   ├── pipeline/                 # stemma-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
 │   │   ├── src/stemma/pipeline/
-│   │   │   ├── crawler/          # openFDA bulk-export ingester + API client, CDRH PDF crawler, stratified pilot sampler
+│   │   │   ├── crawler/          # openFDA bulk-export ingester, ingestion run + manifest, API client, CDRH PDF crawler, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (MAUDE planned)

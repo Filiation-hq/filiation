@@ -20,6 +20,7 @@ import pytest
 from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
 from stemma.core.storage.raw_store import (
+    LATEST_KEY,
     InvalidKeyError,
     KeyExistsError,
     LocalRawStore,
@@ -57,14 +58,15 @@ def put_params(body=ANY) -> dict:
         body: Expected Body argument; ANY by default.
 
     Returns:
-        dict: Expected params, including the If-None-Match write-once guard.
+        dict: Expected params, including the If-None-Match write-once guard and the
+            per-call write id that tells our own retried write apart from someone else's.
     """
     return {
         "Bucket": BUCKET,
         "Key": KEY,
         "Body": body,
         "IfNoneMatch": "*",
-        "Metadata": {"sha256": PAYLOAD_SHA},
+        "Metadata": {"sha256": PAYLOAD_SHA, "write-id": ANY},
     }
 
 
@@ -97,6 +99,11 @@ def r2_store_written_twice(tmp_path: Path):
         service_error_code="PreconditionFailed",
         http_status_code=412,
         expected_params=put_params(),
+    )
+    stubber.add_response(
+        "head_object",
+        {"Metadata": {"sha256": PAYLOAD_SHA, "write-id": "an-earlier-run"}},
+        {"Bucket": BUCKET, "Key": KEY},
     )
     stubber.activate()
     return R2RawStore(BUCKET, client), stubber.assert_no_pending_responses
@@ -262,3 +269,66 @@ def test_raw_store_from_env_rejects_unknown_or_incomplete_configuration(tmp_path
     # Both must fail loudly instead of silently writing somewhere else.
     with pytest.raises(ValueError):
         raw_store_from_env(env, local_root=tmp_path)
+
+
+def test_local_write_latest_replaces_the_pointer_and_only_the_pointer(tmp_path):
+    # Sample: latest.json written for run 101, then for run 102. latest.json is the one
+    # mutable object (ADR-010), so the second write replaces the first.
+    store = LocalRawStore(tmp_path)
+    store.write_latest(b'{"run_id": "101"}')
+    store.write_latest(b'{"run_id": "102"}')
+    assert (tmp_path / LATEST_KEY).read_bytes() == b'{"run_id": "102"}'
+    assert store.list() == [LATEST_KEY]
+
+
+def test_r2_write_latest_puts_pointer_without_if_none_match():
+    # Sample: stubbed put_object for latest.json. Unlike put_once, the pointer write must
+    # not send IfNoneMatch, or every run after the first would fail with 412.
+    client = make_r2_client()
+    with Stubber(client) as stubber:
+        stubber.add_response(
+            "put_object",
+            {"ETag": '"p"'},
+            {"Bucket": BUCKET, "Key": LATEST_KEY, "Body": b'{"run_id": "102"}', "ContentType": "application/json"},
+        )
+        R2RawStore(BUCKET, client).write_latest(b'{"run_id": "102"}')
+        stubber.assert_no_pending_responses()
+
+
+def r2_conflict_store(stored_write_id: str) -> tuple:
+    """Builds an R2RawStore whose put gets 412 and whose stored object carries stored_write_id.
+
+    Args:
+        stored_write_id: write-id metadata on the object already at KEY.
+
+    Returns:
+        tuple: (store using write id "w-this-call", stubber).
+    """
+    client = make_r2_client()
+    stubber = Stubber(client)
+    stubber.add_client_error(
+        "put_object", service_error_code="PreconditionFailed", http_status_code=412, expected_params=put_params()
+    )
+    stubber.add_response(
+        "head_object",
+        {"Metadata": {"sha256": PAYLOAD_SHA, "write-id": stored_write_id}},
+        {"Bucket": BUCKET, "Key": KEY},
+    )
+    stubber.activate()
+    return R2RawStore(BUCKET, client, new_write_id=lambda: "w-this-call"), stubber
+
+
+def test_r2_put_once_treats_412_on_its_own_retried_write_as_success():
+    # Sample: a 290 MB upload whose response is lost to a timeout, so boto3 retries and R2
+    # answers 412. The stored object carries this call's write id, so the first attempt
+    # did commit. Cloudflare documents this case; it must not fail the run.
+    store, stubber = r2_conflict_store("w-this-call")
+    assert store.put_once(KEY, PAYLOAD) == PAYLOAD_SHA
+    stubber.assert_no_pending_responses()
+
+
+def test_r2_put_once_raises_when_412_object_came_from_another_write():
+    # Sample: 412 on a key whose object was written by an earlier run (different write id).
+    store, _ = r2_conflict_store("an-earlier-run")
+    with pytest.raises(KeyExistsError):
+        store.put_once(KEY, PAYLOAD)

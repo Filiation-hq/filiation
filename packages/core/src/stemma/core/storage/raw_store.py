@@ -6,14 +6,16 @@ import hashlib
 import os
 import shutil
 import tempfile
+import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from stemma.core.utils.paths import get_raw_dir
 
 DEFAULT_BUCKET = "stemma-raw"
+LATEST_KEY = "latest.json"
 
 
 class KeyExistsError(Exception):
@@ -70,6 +72,14 @@ class RawStore(ABC):
         Raises:
             KeyExistsError: If an object already exists at key.
             InvalidKeyError: If key is malformed.
+        """
+
+    @abstractmethod
+    def write_latest(self, data: bytes) -> None:
+        """Replaces latest.json, the one mutable object, with data.
+
+        Args:
+            data: Serialized LatestPointer.
         """
 
     @abstractmethod
@@ -162,6 +172,18 @@ class LocalRawStore(RawStore):
             os.unlink(tmp_name)
         return hashlib.sha256(payload).hexdigest()
 
+    def write_latest(self, data: bytes) -> None:
+        """Atomically replaces latest.json, so readers see the old or new pointer, never half.
+
+        Args:
+            data: Serialized LatestPointer.
+        """
+        self.root.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=self.root, prefix=".tmp-")
+        with os.fdopen(fd, "wb") as tmp:
+            tmp.write(data)
+        os.replace(tmp_name, self.root / LATEST_KEY)
+
     def get(self, key: str, dest: Path) -> Path:
         """Copies the file at key to a local path.
 
@@ -231,15 +253,19 @@ def _error_status(exc: Exception) -> tuple[str, int]:
 class R2RawStore(RawStore):
     """RawStore backed by a Cloudflare R2 bucket through the S3 API (boto3)."""
 
-    def __init__(self, bucket: str, client: Any) -> None:
+    def __init__(
+        self, bucket: str, client: Any, new_write_id: Callable[[], str] = lambda: uuid.uuid4().hex
+    ) -> None:
         """Creates a store over an existing S3-compatible client.
 
         Args:
             bucket: Bucket name, normally "stemma-raw".
             client: boto3 S3 client configured with the R2 endpoint.
+            new_write_id: Returns a unique id per put_once call; injectable for tests.
         """
         self.bucket = bucket
         self.client = client
+        self.new_write_id = new_write_id
 
     def put_once(self, key: str, data: bytes | Path) -> str:
         """Stores data under key with If-None-Match: *, so R2 refuses an existing key.
@@ -252,7 +278,7 @@ class R2RawStore(RawStore):
             str: Hex SHA-256 of the stored bytes, also saved as object metadata.
 
         Raises:
-            KeyExistsError: If R2 answers 412 PreconditionFailed.
+            KeyExistsError: If R2 answers 412 and the stored object came from another write.
             InvalidKeyError: If key is malformed.
             botocore.exceptions.ClientError: For any other S3 error.
         """
@@ -260,20 +286,35 @@ class R2RawStore(RawStore):
 
         payload = _read_payload(data)
         digest = hashlib.sha256(payload).hexdigest()
+        write_id = self.new_write_id()
         try:
             self.client.put_object(
                 Bucket=self.bucket,
                 Key=validate_key(key),
                 Body=payload,
                 IfNoneMatch="*",
-                Metadata={"sha256": digest},
+                Metadata={"sha256": digest, "write-id": write_id},
             )
         except ClientError as exc:
             code, status = _error_status(exc)
-            if code == "PreconditionFailed" or status == 412:
+            if code != "PreconditionFailed" and status != 412:
+                raise
+            # A timed-out attempt can commit and then lose its response; boto3's retry then
+            # gets 412 for our own object (Cloudflare R2 conditional-operations docs).
+            stored = self.client.head_object(Bucket=self.bucket, Key=key).get("Metadata", {})
+            if stored.get("write-id") != write_id:
                 raise KeyExistsError(key) from exc
-            raise
         return digest
+
+    def write_latest(self, data: bytes) -> None:
+        """Overwrites latest.json without If-None-Match; R2 PUTs replace atomically.
+
+        Args:
+            data: Serialized LatestPointer.
+        """
+        self.client.put_object(
+            Bucket=self.bucket, Key=LATEST_KEY, Body=data, ContentType="application/json"
+        )
 
     def get(self, key: str, dest: Path) -> Path:
         """Streams the object at key to a local file.

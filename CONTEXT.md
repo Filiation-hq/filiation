@@ -92,7 +92,7 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 ## 7. Storage Terms (ADR-010)
 
 - **Raw snapshot**: The set of raw objects (openFDA bulk exports, CDRH PDFs) that one ingestion run used, as listed in its run manifest. Snapshots are never edited.
-- **Run manifest**: `runs/<YYYY-MM-DD>_<run-id>/manifest.json`. It lists every object in a run with its key, SHA-256, size and record count, plus openFDA `export_date`, commit SHA and run ID. It is a shared data contract.
+- **Run manifest**: `runs/<YYYY-MM-DD>_<run-id>/manifest.json`. It lists every object in a run with its key, SHA-256, size and record count, plus openFDA `export_date` and `last_updated`, commit SHA and run ID. Every run lists all current objects, including unchanged ones, so one manifest describes the whole snapshot. Schema: `RunManifest` in `packages/core/src/stemma/core/schemas/run_manifest.py` (`schema_version` 1). It is a shared data contract.
 - **`export_date`**: openFDA's own version date for a bulk export (from `download.json`). Raw JSON is partitioned by it, not by our run date.
 - **Write-once**: Once an object exists in the raw store, it is never overwritten. New content always gets a new key.
 - **`latest.json` pointer**: The only mutable object in the raw store. It points to the newest complete run manifest and is updated last.
