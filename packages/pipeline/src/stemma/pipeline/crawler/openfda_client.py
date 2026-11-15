@@ -56,6 +56,18 @@ class OpenFDAClient:
 
         raise RuntimeError(f"Failed to fetch {url} after 3 attempts.")
 
+    def count_510k(self, search: str) -> int:
+        """Counts the 510(k) records matching an openFDA search.
+
+        Args:
+            search: openFDA search expression, e.g. "k_number:K96* AND statement_or_summary:Summary".
+
+        Returns:
+            int: openFDA's meta.results.total, or 0 when nothing matches.
+        """
+        data = self._make_request("510k.json", {"search": search, "limit": 1})
+        return int(data.get("meta", {}).get("results", {}).get("total", 0))
+
     def fetch_510k_records(self, limit: int = 100, skip: int = 0, search: str | None = None) -> list[DeviceNode]:
         """Fetches 510(k) clearances and parses into DeviceNode instances."""
         params: dict[str, Any] = {"limit": min(limit, 100), "skip": skip}

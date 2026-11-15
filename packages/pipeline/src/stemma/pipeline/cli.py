@@ -21,7 +21,7 @@ from stemma.pipeline.crawler.cdrh_crawler import default_opener as cdrh_opener
 from stemma.pipeline.crawler.ingestion_run import run_ingestion
 from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener
 from stemma.pipeline.crawler.openfda_client import OpenFDAClient
-from stemma.pipeline.crawler.sampler import PilotSampler
+from stemma.pipeline.crawler.sampler import ERAS, PilotSampler, collect_pilot_pool
 from stemma.pipeline.extraction.parser import SummaryParser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -138,11 +138,15 @@ def sample_pilot(size: int, input_path: str | None, output: str | None) -> None:
             raw_data = json.load(f)
         nodes = [DeviceNode.from_dict(d) for d in raw_data]
     else:
-        logger.info("Fetching sample of 510(k) records from openFDA for pilot stratification...")
-        # Fetch a batch from openFDA to stratify
-        nodes = client.fetch_510k_records(limit=100)
+        logger.info("Fetching one random page of Summary records per fiscal year from openFDA...")
+        nodes = collect_pilot_pool(client)
 
     manifest = sampler.sample_nodes(nodes, total_sample_size=size)
+    per_era = size // len(ERAS)
+    for era in ERAS:
+        got = sum(entry["era"] == era for entry in manifest)
+        if got < per_era:
+            logger.warning("%s: %d of %d entries; openFDA returned too few Summary records", era, got, per_era)
     out_file = Path(output) if output else (get_interim_dir() / "pilot_manifest.json")
     saved = sampler.save_manifest(manifest, out_file)
     logger.info("Generated pilot manifest with %d devices across eras: %s", len(manifest), saved)
