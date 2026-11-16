@@ -85,7 +85,12 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 
 ## 6. Project Terms
 
-- **Stage**: A roadmap phase (0–4, with Stage 2 split into 2a and 2b) whose start is gated on the previous stage's testable exit criteria, not on a date. See `docs/ROADMAP.md` and ADR-009.
+- **Stage**: A roadmap phase (0–7, with Stage 2 split into 2a and 2b) whose start is gated on the previous stage's testable exit criteria, not on a date. See `docs/ROADMAP.md` and ADR-009.
+- **As-of query**: A question answered using only what the raw store had recorded by a given date: records, recalls and graph edges whose snapshot date is on or before it. It is what makes a backtest free of look-ahead (Stage 5).
+- **Snapshot citation**: A reference to one frozen release (its snapshot ID and DOI) that lets anyone reproduce a published number exactly.
+- **Point-in-time vs reconstructed**: A point-in-time value comes from a weekly snapshot taken at that date. A reconstructed value comes from today's openFDA data using event dates, so later amendments may have leaked in. Every metric says which it is.
+- **Recall-prediction benchmark**: A fixed, published task (outcome, horizon, date-based splits, metrics) for predicting device recalls, scored on test periods whose labels are frozen in advance (Stage 6).
+- **Predicate simulator**: A tool that shows how devices citing a candidate predicate fared over time (recalls, review times, lineage age and depth), computed as of each date and cited to source documents, against a matched baseline. It reports facts about lineages, not a verdict on any device (Stage 7).
 
 ---
 
