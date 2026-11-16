@@ -9,6 +9,15 @@ Task map:
         doesn't start with its run_date; a non-ISO export_date; negative sizes.
     Invariants: manifest_key is always runs/<run_id>/manifest.json; a manifest that loads
         from JSON equals the one that wrote it; invalid manifests fail at construction.
+
+SourceDiff (#40):
+    Input: one source's added/removed/amended counts against the previous run, that run's
+        id and export_date, and how many amended records changed each field.
+    Output: a diff stored on the SourceSnapshot that round-trips through JSON.
+    Edge cases: negative counts; amendments with no changed fields (or the reverse); a
+        field count above the amended total; manifests written before diffs existed.
+    Invariants: changed_fields serializes in field-name order, so the same diff always
+        produces the same JSON.
 """
 
 import json
@@ -18,6 +27,7 @@ from stemma.core.schemas.run_manifest import (
     LatestPointer,
     ManifestObject,
     RunManifest,
+    SourceDiff,
     SourceSnapshot,
 )
 
@@ -138,3 +148,79 @@ def test_latest_pointer_round_trips_and_names_the_manifest():
     assert loaded.manifest_key == "runs/2026-11-16_43306392741/manifest.json"
     assert loaded.run_id == "2026-11-16_43306392741"
     assert loaded.updated_at == "2026-11-16T06:01:10Z"
+
+
+def make_diff(**overrides) -> SourceDiff:
+    """Builds a valid diff: 12 added, 1 removed, 3 amended against last week's 510(k) run.
+
+    Args:
+        **overrides: SourceDiff fields to replace.
+
+    Returns:
+        SourceDiff: The diff.
+    """
+    fields = {
+        "previous_run_id": "2026-11-09_43306392000",
+        "previous_export_date": "2026-11-02",
+        "added": 12,
+        "removed": 1,
+        "amended": 3,
+        "changed_fields": {"openfda": 3, "decision_date": 1},
+    }
+    fields.update(overrides)
+    return SourceDiff(**fields)
+
+
+def test_run_manifest_round_trips_a_source_diff_through_json():
+    # Sample: the default 510(k) manifest with a diff attached (12 added, 1 removed,
+    # 3 amended). The diff must survive JSON out and back in unchanged.
+    manifest = make_manifest()
+    snapshot = manifest.sources[0]
+    with_diff = make_manifest(
+        sources=[SourceSnapshot(snapshot.source, snapshot.status, snapshot.objects, snapshot.export_date,
+                                snapshot.last_updated, diff=make_diff())]
+    )
+    assert RunManifest.from_dict(json.loads(with_diff.to_json())) == with_diff
+
+
+def test_run_manifest_loads_a_manifest_written_before_diffs_existed():
+    # Sample: the default manifest's JSON with no "diff" key on its source, as written by
+    # runs before #40. It must still load, with diff None.
+    data = json.loads(make_manifest().to_json())
+    data["sources"][0].pop("diff", None)
+    assert RunManifest.from_dict(data).sources[0].diff is None
+
+
+def test_source_diff_serializes_changed_fields_in_field_name_order():
+    # Sample: changed_fields given as {"openfda", "decision_date"}. JSON must list
+    # decision_date first so reruns over the same exports give byte-identical manifests.
+    data = make_diff().to_dict()
+    assert list(data["changed_fields"]) == ["decision_date", "openfda"]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"added": -1},
+        {"removed": -2},
+        {"amended": 0},
+        {"amended": 2, "changed_fields": {}},
+        {"amended": 3, "changed_fields": {"openfda": 4}},
+        {"changed_fields": {"openfda": 0, "decision_date": 3}},
+        {"previous_export_date": "2026/11/02"},
+    ],
+    ids=[
+        "negative-added",
+        "negative-removed",
+        "fields-without-amendments",
+        "amendments-without-fields",
+        "field-count-above-amended",
+        "zero-field-count",
+        "non-iso-previous-export-date",
+    ],
+)
+def test_source_diff_rejects_inconsistent_counts(overrides):
+    # Sample: one inconsistency each on the default diff. Every amended record changed at
+    # least one field, and no field can change in more records than were amended.
+    with pytest.raises(ValueError):
+        make_diff(**overrides)

@@ -13,6 +13,9 @@ Task map:
     Invariants: partition URLs come only from the index; nothing is written unless the record
         count matches; an existing object is never replaced; no network in tests. The real
         510(k) export inflates to ~1.6 GB, so counting must stream, never json.load the file.
+
+iter_export_records (#40) streams the same files record by record for the weekly diff; it
+shares the counter's parser, so the same malformed inputs fail it the same way.
 """
 
 import hashlib
@@ -34,6 +37,7 @@ from stemma.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
     count_export_records,
     ingest_export,
+    iter_export_records,
     parse_export_listing,
     read_export_stats,
 )
@@ -192,3 +196,22 @@ def test_count_export_records_reports_a_corrupt_zip_as_an_integrity_error(tmp_pa
     path.write_bytes(fixture_export_zip()[:20])
     with pytest.raises(ExportIntegrityError):
         count_export_records(path)
+
+
+def test_iter_export_records_yields_each_record_in_file_order(tmp_path):
+    # Sample: the 3-record fixture (K210758, K030123, K882211), including a device_name
+    # with "{" and "]" and an applicant with escaped quotes. Records must come back whole.
+    path = tmp_path / "export.zip"
+    path.write_bytes(fixture_export_zip())
+    records = list(iter_export_records(path))
+    assert [r["k_number"] for r in records] == ["K210758", "K030123", "K882211"]
+    assert records[1]["applicant"] == 'Example "Quoted" Medical, Inc.'
+
+
+def test_iter_export_records_rejects_an_export_with_no_results_array(tmp_path):
+    # Sample: {"meta": {}} with no "results" key. Yielding nothing would make every record
+    # look removed in the weekly diff, so it must fail like the counter does.
+    path = tmp_path / "export.zip"
+    path.write_bytes(make_export_zip({"x.json": b'{"meta": {}}'}))
+    with pytest.raises(ExportIntegrityError):
+        list(iter_export_records(path))
