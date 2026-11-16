@@ -9,17 +9,17 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from stemma.core.schemas.run_manifest import (
+from recension.core.schemas.run_manifest import (
     LatestPointer,
     ManifestObject,
     RunManifest,
     SourceDiff,
     SourceSnapshot,
 )
-from stemma.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
-from stemma.core.utils.hashing import compute_sha256
-from stemma.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
-from stemma.pipeline.crawler.openfda_bulk import (
+from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
+from recension.core.utils.hashing import compute_sha256
+from recension.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
+from recension.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
     ExportResult,
     Opener,

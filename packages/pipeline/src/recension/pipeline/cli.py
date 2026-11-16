@@ -1,4 +1,4 @@
-"""Unified CLI for the Stemma data engineering pipeline."""
+"""Unified CLI for the Recension data engineering pipeline."""
 
 from __future__ import annotations
 
@@ -15,27 +15,27 @@ from pathlib import Path
 
 import click
 import pandas as pd
-from stemma.core.data_loader import StemmaDataLoader
-from stemma.core.schemas.device_nodes import DeviceNode
-from stemma.core.storage.raw_store import raw_store_from_env
-from stemma.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
-from stemma.pipeline.crawler.cdrh_crawler import CDRHCrawler, CrawlTarget
-from stemma.pipeline.crawler.cdrh_crawler import default_opener as cdrh_opener
-from stemma.pipeline.crawler.ingestion_run import run_ingestion
-from stemma.pipeline.crawler.openfda_bulk import SOURCES, default_opener
-from stemma.pipeline.crawler.openfda_client import OpenFDAClient
-from stemma.pipeline.crawler.pdf_backfill import BackfillError, run_backfill
-from stemma.pipeline.crawler.sampler import ERAS, PilotSampler, collect_pilot_pool
-from stemma.pipeline.extraction.parser import SummaryParser
+from recension.core.data_loader import RecensionDataLoader
+from recension.core.schemas.device_nodes import DeviceNode
+from recension.core.storage.raw_store import raw_store_from_env
+from recension.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
+from recension.pipeline.crawler.cdrh_crawler import CDRHCrawler, CrawlTarget
+from recension.pipeline.crawler.cdrh_crawler import default_opener as cdrh_opener
+from recension.pipeline.crawler.ingestion_run import run_ingestion
+from recension.pipeline.crawler.openfda_bulk import SOURCES, default_opener
+from recension.pipeline.crawler.openfda_client import OpenFDAClient
+from recension.pipeline.crawler.pdf_backfill import BackfillError, run_backfill
+from recension.pipeline.crawler.sampler import ERAS, PilotSampler, collect_pilot_pool
+from recension.pipeline.extraction.parser import SummaryParser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("stemma.pipeline")
+logger = logging.getLogger("recension.pipeline")
 crawl_sleep = time.sleep
 
 
 @click.group()
 def cli() -> None:
-    """Stemma Pipeline: Data Engineering for FDA 510(k) Lineage Graph."""
+    """Recension Pipeline: Data Engineering for FDA 510(k) Lineage Graph."""
     pass
 
 
@@ -349,9 +349,9 @@ def export_derived(edges: str | None, dest: str | None) -> None:
 @cli.command("status")
 def status() -> None:
     """Displays local data store health and file counts."""
-    loader = StemmaDataLoader()
+    loader = RecensionDataLoader()
     summary = loader.summary()
-    click.echo("=== Stemma Data Engineering Status ===")
+    click.echo("=== Recension Data Engineering Status ===")
     click.echo(json.dumps(summary, indent=2))
 
 

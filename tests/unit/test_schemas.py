@@ -1,14 +1,14 @@
-"""Unit tests for Stemma core schemas."""
+"""Unit tests for Recension core schemas."""
 
 import unittest
 
-from stemma.core.schemas.device_nodes import DeviceNode
-from stemma.core.schemas.predicate_edges import (
+from recension.core.schemas.device_nodes import DeviceNode
+from recension.core.schemas.predicate_edges import (
     ExtractionMethod,
     PredicateEdge,
     RelationshipType,
 )
-from stemma.core.schemas.recalls import RecallRecord
+from recension.core.schemas.recalls import RecallRecord
 
 
 class TestSchemas(unittest.TestCase):

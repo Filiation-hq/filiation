@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stemma-core"
+name = "recension-core"
 version = "0.1.0"
-description = "Core data contracts, schemas, and storage utilities for Stemma"
+description = "Core data contracts, schemas, and storage utilities for Recension"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
@@ -23,8 +23,8 @@ remote = [
 ]
 
 [project.scripts]
-stemma-data = "stemma.core.data_loader:main"
+recension-data = "recension.core.data_loader:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["stemma*"]
+include = ["recension*"]

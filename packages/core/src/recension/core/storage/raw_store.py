@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from stemma.core.utils.paths import get_raw_dir
+from recension.core.utils.paths import get_raw_dir
 
 DEFAULT_BUCKET = "stemma-raw"
 LATEST_KEY = "latest.json"
@@ -403,7 +403,7 @@ def raw_store_from_env(
 
     Raises:
         ValueError: If the backend name is unknown or r2 has no endpoint.
-        ImportError: If "r2" is selected without boto3 (install stemma-core[remote]).
+        ImportError: If "r2" is selected without boto3 (install recension-core[remote]).
     """
     env = os.environ if environ is None else environ
     backend = env.get("STEMMA_RAW_STORE", "local").lower()

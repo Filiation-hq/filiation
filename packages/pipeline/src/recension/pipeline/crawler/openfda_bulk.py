@@ -16,7 +16,9 @@ from typing import IO, Any
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from stemma.core.storage.raw_store import RawStore
+from recension.core.storage.raw_store import RawStore
+
+USER_AGENT = "Recension/0.1.0 (device-lineage-research)"
 
 DOWNLOAD_INDEX_URL = "https://api.fda.gov/download.json"
 SOURCES = {"510k": ("device", "510k"), "recall": ("device", "recall")}
@@ -81,7 +83,7 @@ class ExportResult:
 
 
 def default_opener(url: str) -> IO[bytes]:
-    """Opens a URL over HTTPS with Stemma's User-Agent.
+    """Opens a URL over HTTPS with Recension's User-Agent.
 
     Args:
         url: URL to fetch.
@@ -89,7 +91,7 @@ def default_opener(url: str) -> IO[bytes]:
     Returns:
         IO[bytes]: Response stream; the caller closes it.
     """
-    request = Request(url, headers={"User-Agent": "Stemma/0.1.0 (device-lineage-research)"})
+    request = Request(url, headers={"User-Agent": USER_AGENT})
     return urlopen(request, timeout=60)
 
 

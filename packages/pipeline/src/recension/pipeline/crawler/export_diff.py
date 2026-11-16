@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from stemma.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
+from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
 
 # Verified 2026-11-13 against the openFDA API: present on every record and never repeated.
 RECORD_KEYS = {"510k": "k_number", "recall": "product_res_number"}

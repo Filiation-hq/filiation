@@ -1,4 +1,4 @@
-"""Unit tests for the write-once raw snapshot store in stemma.core.storage.raw_store (ADR-010).
+"""Unit tests for the write-once raw snapshot store in recension.core.storage.raw_store (ADR-010).
 
 Task map:
     Input: a key in the ADR-010 layout (e.g. "openfda/510k/export_date=2026-11-09/x.json.zip")
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
-from stemma.core.storage.raw_store import (
+from recension.core.storage.raw_store import (
     LATEST_KEY,
     InvalidKeyError,
     KeyExistsError,

@@ -1,4 +1,4 @@
-"""Unit tests for the stemma-pipeline click CLI commands.
+"""Unit tests for the recension-pipeline click CLI commands.
 
 Task map:
     Input: CLI arguments plus small JSON fixtures written to a temp dir.
@@ -12,8 +12,8 @@ Task map:
 import json
 
 from click.testing import CliRunner
-from stemma.core.schemas.device_nodes import DeviceNode
-from stemma.pipeline.cli import cli
+from recension.core.schemas.device_nodes import DeviceNode
+from recension.pipeline.cli import cli
 
 
 def test_sample_pilot_with_input_file_writes_manifest_without_name_error(tmp_path):
@@ -45,7 +45,7 @@ def test_extract_reads_the_raw_store_pdf_layout_and_takes_the_k_number_from_the_
     # Sample: two versions of K221020's summary and one of K994060, stored as
     # <dir>/<K-number>/<sha256>.pdf by crawl-pdfs. Each file must be parsed with its folder's
     # K-number as the subject, not the hash in its file name.
-    import stemma.pipeline.cli as cli_module
+    import recension.pipeline.cli as cli_module
 
     pdfs = tmp_path / "cdrh" / "pdfs"
     for k_number, sha in [("K221020", "a" * 64), ("K221020", "b" * 64), ("K994060", "c" * 64)]:
