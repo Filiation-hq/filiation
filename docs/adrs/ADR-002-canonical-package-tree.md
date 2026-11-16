@@ -1,7 +1,7 @@
 # ADR-002: packages/*/src/stemma/ is the only source tree
 
 **Date:** 2026-11-11
-**Status:** Accepted
+**Status:** Accepted (namespace renamed to `recension` by ADR-011)
 **Author:** Steven Rocca
 
 ## Decision
