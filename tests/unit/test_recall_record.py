@@ -1,0 +1,131 @@
+"""Unit tests for parsing openFDA device/recall records into RecallRecord (#77, ADR-012).
+
+Input: one raw openFDA device/recall record (a dict straight from the API or bulk export).
+Output: a RecallRecord keyed on product_res_number, with res_event_number, k_numbers, dates
+and status copied over, and classification left None (device/recall has no recall class).
+
+Edge cases:
+- Real record with ~20 fields the contract does not carry -> extra fields ignored.
+- product_res_number missing -> ValueError naming the field.
+- res_event_number blank -> ValueError naming the field.
+- k_numbers absent or null (about a third of records) -> empty list.
+- event_date_posted absent (13,575 records) -> None.
+- Status lives in recall_status, not status -> read from recall_status.
+- Blank classification string -> None, never "".
+- to_dict / from_dict round trip -> equal record.
+
+Invariants: no field is invented (classification is never guessed); keys are stripped.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from recension.core.schemas.data_contract import (
+    CREATE_TABLE_DEVICE_RECALL_LINKS,
+    CREATE_TABLE_RECALLS,
+)
+from recension.core.schemas.recalls import RecallRecord
+
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "openfda" / "recall_record_Z-0001-04.json"
+
+
+def real_record() -> dict:
+    """Loads the real openFDA device/recall record Z-0001-04.
+
+    Returns:
+        dict: A fresh copy of the record, safe to mutate.
+    """
+    return json.loads(FIXTURE.read_text())
+
+
+def test_from_openfda_parses_a_real_recall_record_keyed_on_product_res_number() -> None:
+    # Sample: real record Z-0001-04 (event 27549, K020436), copied from the openFDA API on
+    # 2026-11-16 with the contact person removed. It has no recall_number field at all.
+    rec = RecallRecord.from_openfda(real_record())
+    assert rec.product_res_number == "Z-0001-04"
+    assert rec.res_event_number == "27549"
+    assert rec.k_numbers == ["K020436"]
+    assert rec.event_date_initiated == "2003-10-27"
+    assert rec.event_date_posted == "2003-10-29"
+
+
+def test_from_openfda_ignores_fields_the_contract_does_not_carry() -> None:
+    # Sample: the same real record, which also carries cfres_id, code_info, recalling_firm,
+    # firm_fei_number and others. Passing them to the constructor used to raise TypeError.
+    rec = RecallRecord.from_openfda(real_record())
+    assert "cfres_id" not in rec.to_dict()
+    assert "recalling_firm" not in rec.to_dict()
+
+
+def test_from_openfda_leaves_classification_none_because_device_recall_has_no_class() -> None:
+    # Sample: the real record. device/recall never has classification (0 of 59,705 records),
+    # so the old client's guess (product_res_number as the class) must not come back.
+    assert RecallRecord.from_openfda(real_record()).classification is None
+
+
+def test_from_openfda_rejects_a_record_without_product_res_number() -> None:
+    # Sample: the real record with product_res_number removed, so it has no record key.
+    record = real_record()
+    del record["product_res_number"]
+    with pytest.raises(ValueError, match="product_res_number"):
+        RecallRecord.from_openfda(record)
+
+
+def test_from_openfda_rejects_a_blank_res_event_number() -> None:
+    # Sample: the real record with res_event_number set to whitespace, so the event is unknown.
+    record = real_record()
+    record["res_event_number"] = "  "
+    with pytest.raises(ValueError, match="res_event_number"):
+        RecallRecord.from_openfda(record)
+
+
+def test_from_openfda_reads_an_absent_k_numbers_field_as_an_empty_list() -> None:
+    # Sample: the real record without k_numbers; about 21k of 59,705 records have none.
+    record = real_record()
+    del record["k_numbers"]
+    assert RecallRecord.from_openfda(record).k_numbers == []
+
+
+def test_from_openfda_reads_a_null_k_numbers_field_as_an_empty_list() -> None:
+    # Sample: the real record with k_numbers set to JSON null instead of a list.
+    record = real_record()
+    record["k_numbers"] = None
+    assert RecallRecord.from_openfda(record).k_numbers == []
+
+
+def test_from_openfda_reads_an_absent_event_date_posted_as_none() -> None:
+    # Sample: the real record without event_date_posted, as in 13,575 openFDA records.
+    record = real_record()
+    del record["event_date_posted"]
+    assert RecallRecord.from_openfda(record).event_date_posted is None
+
+
+def test_from_openfda_reads_recall_status_from_the_recall_status_field() -> None:
+    # Sample: the real record, whose status is in recall_status ("Terminated"); the old
+    # client read a "status" key that openFDA does not have.
+    assert RecallRecord.from_openfda(real_record()).recall_status == "Terminated"
+
+
+def test_recall_record_treats_a_blank_classification_as_none() -> None:
+    # Sample: a record built with classification "  ", as an empty enforcement field would give.
+    rec = RecallRecord(product_res_number="Z-0001-04", res_event_number="27549", classification="  ")
+    assert rec.classification is None
+
+
+def test_recall_record_round_trips_through_to_dict_and_from_dict() -> None:
+    # Sample: the parsed real record, written to a dict and read back.
+    rec = RecallRecord.from_openfda(real_record())
+    assert RecallRecord.from_dict(rec.to_dict()) == rec
+
+
+def test_recalls_ddl_keys_on_product_res_number_and_allows_a_null_classification() -> None:
+    # Sample: the DuckDB DDL strings for recalls and device_recall_links. Both used to key on
+    # recall_number and declare classification NOT NULL, which real data cannot satisfy.
+    assert "product_res_number VARCHAR PRIMARY KEY" in CREATE_TABLE_RECALLS
+    assert "PRIMARY KEY (k_number, product_res_number)" in CREATE_TABLE_DEVICE_RECALL_LINKS
+    for ddl in (CREATE_TABLE_RECALLS, CREATE_TABLE_DEVICE_RECALL_LINKS):
+        assert "recall_number" not in ddl.replace("product_res_number", "")
+        assert "classification VARCHAR NOT NULL" not in ddl

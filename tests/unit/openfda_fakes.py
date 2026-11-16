@@ -54,7 +54,7 @@ def recall_export_zip() -> bytes:
     Returns:
         bytes: Zip bytes for device-recall-0001-of-0001.json.zip.
     """
-    body = json.dumps({"meta": {}, "results": [{"recall_number": "Z-0001-2026"}, {"recall_number": "Z-0002-2026"}]})
+    body = json.dumps({"meta": {}, "results": [{"product_res_number": "Z-0001-2026", "res_event_number": "90001"}, {"product_res_number": "Z-0002-2026", "res_event_number": "90001"}]})
     return make_export_zip({"device-recall-0001-of-0001.json": body})
 
 

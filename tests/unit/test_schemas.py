@@ -45,7 +45,7 @@ class TestSchemas(unittest.TestCase):
     def test_recall_record_design_defect_flag(self):
         rec_design = RecallRecord(
             res_event_number="90001",
-            recall_number="Z-1001-2023",
+            product_res_number="Z-1001-2023",
             classification="Class I",
             k_numbers=["K180999"],
             root_cause_description="Software design flaw causing battery drain",
@@ -54,7 +54,7 @@ class TestSchemas(unittest.TestCase):
 
         rec_packaging = RecallRecord(
             res_event_number="90002",
-            recall_number="Z-1002-2023",
+            product_res_number="Z-1002-2023",
             classification="Class II",
             k_numbers=["K180999"],
             root_cause_description="Packaging seal integrity compromised during transport",
