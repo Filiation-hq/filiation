@@ -43,7 +43,7 @@ recension/
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (MAUDE planned)
-│   │   │   └── cli.py            # `recension-pipeline` ingest-openfda | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived
+│   │   │   └── cli.py            # `recension-pipeline` ingest-openfda | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived | status
 │   │   └── pyproject.toml
 │   │
 │   └── models/                   # recension-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
@@ -61,7 +61,7 @@ recension/
 │   └── 03_calibration_check.ipynb# Calibration curves and temporal out-of-time backtests
 │
 ├── tests/                        # pytest suite (`make test`)
-│   ├── fixtures/                 # sample_summary_texts.json (curated 510(k) summary text by era)
+│   ├── fixtures/                 # sample_summary_texts.json (curated 510(k) summary text by era); openfda/ (minimal download.json index and one 510(k) export partition)
 │   ├── unit/                     # One test_<area>.py per module or config surface
 │   └── integration/              # (planned) Cross-module pipeline tests against fixtures
 │
@@ -69,4 +69,4 @@ recension/
     ├── ROADMAP.md                # Maturity stages 0–7 with exit criteria; one milestone per stage (ADR-009)
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
     ├── bias-register.md          # Overfitting, leakage, and bias factors R01–R46: stage gate, owner, control, issue
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-010)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-011)
