@@ -4,6 +4,8 @@ Each stage is a GitHub milestone. A stage begins only once the previous stage's 
 
 Ingestion stays batch at every stage (ADR-008). A stage also exits only when every factor in `docs/bias-register.md` that blocks it is handled or measured.
 
+Stages 5–7 turn the published graph and score into a platform others build on: first something researchers can query and cite, then a shared benchmark, then a simulator for regulatory teams. Each depends on the credibility of the one before it, and all of them depend on point-in-time correctness from Stage 1 onward.
+
 | Stage | Goal | Steven (DE) | Alden (DS) | Exit criteria |
 |---|---|---|---|---|
 | **0: Foundation** | The repo is trustworthy | Repo Bootstrap stack merged; `tests` and `lint` required on `main` | Review data contracts and `CONTEXT.md` definitions | Repo Bootstrap milestone closed; CI blocks failing merges |
@@ -12,3 +14,6 @@ Ingestion stays batch at every stage (ADR-008). A stage also exits only when eve
 | **2b: Modeling** | A first risk model | Point-in-time training snapshots; feature data | Survival baseline (library per ADR-007), immortal-time-safe features, out-of-time backtests | Baseline beats the product-code-only baseline in backtests |
 | **3: Productized Score** | An explainable public output | Release feed and changelog; evaluate an orchestrator (ADR-008) | Calibration, bias checks, score explanations | Calibrated score shipped with documented methodology |
 | **4: Operational Maturity** | Others depend on it | Monitoring, alerting, freshness commitments, R2 sync | Drift monitoring, recalibration schedule | External consumers exist, and incidents have an owner |
+| **5: Research Platform** | Anyone can query and cite the graph as of any date | As-of query API over the write-once snapshots; a citable snapshot ID and Zenodo DOI per release; dataset card | Methodology and accuracy pages; citation guidance; every metric labelled point-in-time or reconstructed | **TBD (Alden + Steven):** an as-of query reproduces a published snapshot exactly; the minimum span of true point-in-time history before launch |
+| **6: Public Benchmark** | A fixed, leak-resistant recall-prediction task others can enter | Archived benchmark files with a DOI; frozen test-label cut dates; scoring with submission limits | Task spec, date-based splits, metrics and baselines; leaderboard rules | **TBD (Alden):** spec published before the first submission; baselines reproduce from the archived files |
+| **7: Predicate Simulator** | Regulatory teams see how devices citing a candidate predicate fared, as of any date, with every number cited | Query service with a query log; as-of computation at query time | Matched baselines, false-discovery control, shrunken small-count ratios | **TBD (Alden + Steven):** every number traces to a snapshot and a PDF page; validated with pilot regulatory-affairs users |
