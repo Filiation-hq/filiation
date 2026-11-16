@@ -1,4 +1,4 @@
-"""Path resolution utilities for the 3-tier Stemma data layout."""
+"""Path resolution utilities for the 3-tier Recension data layout."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ ROOT_MARKER = "ARCHITECTURE.txt"
 
 
 def get_repo_root(start: Path | None = None) -> Path:
-    """Finds the Stemma repo root by walking up to the directory that holds ARCHITECTURE.txt.
+    """Finds the Recension repo root by walking up to the directory that holds ARCHITECTURE.txt.
 
     Args:
         start: Directory to begin the search from; defaults to this module's directory.

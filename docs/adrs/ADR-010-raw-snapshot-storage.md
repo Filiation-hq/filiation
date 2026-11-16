@@ -1,7 +1,7 @@
 # ADR-010: Raw snapshot storage on Cloudflare R2
 
 **Date:** 2026-11-12
-**Status:** Proposed (decided by Steven Rocca in the #44 grilling; Alden Reagins must sign off on the run manifest contract)
+**Status:** Proposed (decided by Steven Rocca in the #44 grilling; Alden Reagins must sign off on the run manifest contract). Bucket and env var names amended by ADR-011.
 **Author:** Steven Rocca
 
 ## Decision

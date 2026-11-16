@@ -12,9 +12,15 @@ from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from stemma.core.utils.paths import get_raw_dir
+from recension.core.utils.paths import get_raw_dir
 
-DEFAULT_BUCKET = "stemma-raw"
+DEFAULT_BUCKET = "recension-raw"
+# ADR-011 renamed these; a leftover old name is refused rather than silently ignored.
+LEGACY_ENV_VARS = {
+    "STEMMA_RAW_STORE": "RECENSION_RAW_STORE",
+    "STEMMA_R2_ENDPOINT": "RECENSION_R2_ENDPOINT",
+    "STEMMA_R2_BUCKET": "RECENSION_R2_BUCKET",
+}
 LATEST_KEY = "latest.json"
 
 
@@ -259,7 +265,7 @@ class R2RawStore(RawStore):
         """Creates a store over an existing S3-compatible client.
 
         Args:
-            bucket: Bucket name, normally "stemma-raw".
+            bucket: Bucket name, normally "recension-raw".
             client: boto3 S3 client configured with the R2 endpoint.
             new_write_id: Returns a unique id per put_once call; injectable for tests.
         """
@@ -390,11 +396,11 @@ class R2RawStore(RawStore):
 def raw_store_from_env(
     environ: Mapping[str, str] | None = None, local_root: Path | None = None
 ) -> RawStore:
-    """Builds the RawStore named by STEMMA_RAW_STORE ("local" by default, or "r2").
+    """Builds the RawStore named by RECENSION_RAW_STORE ("local" by default, or "r2").
 
     Args:
         environ: Environment to read; defaults to os.environ. For "r2" it needs
-            STEMMA_R2_ENDPOINT and optionally STEMMA_R2_BUCKET; credentials come from
+            RECENSION_R2_ENDPOINT and optionally RECENSION_R2_BUCKET; credentials come from
             AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY as boto3 reads them.
         local_root: Root for the local store; defaults to data/raw/.
 
@@ -402,18 +408,22 @@ def raw_store_from_env(
         RawStore: A LocalRawStore or an R2RawStore.
 
     Raises:
-        ValueError: If the backend name is unknown or r2 has no endpoint.
-        ImportError: If "r2" is selected without boto3 (install stemma-core[remote]).
+        ValueError: If a pre-ADR-011 STEMMA_* variable is set, the backend name is
+            unknown, or r2 has no endpoint.
+        ImportError: If "r2" is selected without boto3 (install recension-core[remote]).
     """
     env = os.environ if environ is None else environ
-    backend = env.get("STEMMA_RAW_STORE", "local").lower()
+    stale = [f"{old} was renamed {new}" for old, new in LEGACY_ENV_VARS.items() if old in env]
+    if stale:
+        raise ValueError(f"{'; '.join(stale)} (ADR-011); rename it in your environment")
+    backend = env.get("RECENSION_RAW_STORE", "local").lower()
     if backend == "local":
         return LocalRawStore(local_root)
     if backend != "r2":
-        raise ValueError(f"Unknown STEMMA_RAW_STORE {backend!r}; expected 'local' or 'r2'")
-    endpoint = env.get("STEMMA_R2_ENDPOINT")
+        raise ValueError(f"Unknown RECENSION_RAW_STORE {backend!r}; expected 'local' or 'r2'")
+    endpoint = env.get("RECENSION_R2_ENDPOINT")
     if not endpoint:
-        raise ValueError("STEMMA_RAW_STORE=r2 requires STEMMA_R2_ENDPOINT")
+        raise ValueError("RECENSION_RAW_STORE=r2 requires RECENSION_R2_ENDPOINT")
     import boto3
 
     client = boto3.client(
@@ -423,4 +433,4 @@ def raw_store_from_env(
         aws_access_key_id=env.get("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=env.get("AWS_SECRET_ACCESS_KEY"),
     )
-    return R2RawStore(env.get("STEMMA_R2_BUCKET", DEFAULT_BUCKET), client)
+    return R2RawStore(env.get("RECENSION_R2_BUCKET", DEFAULT_BUCKET), client)

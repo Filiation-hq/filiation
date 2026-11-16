@@ -1,4 +1,4 @@
-# Stemma Maturity Roadmap
+# Recension Maturity Roadmap
 
 Each stage is a GitHub milestone. A stage begins only once the previous stage's exit criteria are met; dates never decide this (ADR-009). Until Stage 2b, data science work is analysis only: profiling, labeling, accuracy measurement, and descriptive statistics, with no model training.
 

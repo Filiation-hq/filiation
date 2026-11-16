@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stemma-pipeline"
+name = "recension-pipeline"
 version = "0.1.0"
 description = "Data engineering pipeline for scraping, OCR, extraction, and linkage of FDA 510(k) lineages"
 readme = "README.md"
@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-stemma-pipeline = "stemma.pipeline.cli:main"
+recension-pipeline = "recension.pipeline.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["stemma*"]
+include = ["recension*"]

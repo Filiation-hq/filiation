@@ -1,4 +1,4 @@
-"""Unit tests for the write-once raw snapshot store in stemma.core.storage.raw_store (ADR-010).
+"""Unit tests for the write-once raw snapshot store in recension.core.storage.raw_store (ADR-010).
 
 Task map:
     Input: a key in the ADR-010 layout (e.g. "openfda/510k/export_date=2026-11-09/x.json.zip")
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
-from stemma.core.storage.raw_store import (
+from recension.core.storage.raw_store import (
     LATEST_KEY,
     InvalidKeyError,
     KeyExistsError,
@@ -28,7 +28,7 @@ from stemma.core.storage.raw_store import (
     raw_store_from_env,
 )
 
-BUCKET = "stemma-raw"
+BUCKET = "recension-raw"
 KEY = "openfda/510k/export_date=2026-11-09/device-510k-0001-of-0001.json.zip"
 PAYLOAD = b'{"results": []}'
 PAYLOAD_SHA = hashlib.sha256(PAYLOAD).hexdigest()
@@ -242,16 +242,16 @@ def test_r2_list_follows_pagination_and_returns_sorted_keys():
 
 
 def test_raw_store_from_env_defaults_to_local_store_under_given_root(tmp_path):
-    # Sample: no STEMMA_RAW_STORE set. Local is the default so dev runs never touch R2.
+    # Sample: no RECENSION_RAW_STORE set. Local is the default so dev runs never touch R2.
     store = raw_store_from_env({}, local_root=tmp_path)
     assert isinstance(store, LocalRawStore) and store.root == tmp_path
 
 
 def test_raw_store_from_env_builds_r2_store_from_endpoint_and_bucket(tmp_path):
-    # Sample: STEMMA_RAW_STORE=r2 with an endpoint; bucket falls back to stemma-raw.
+    # Sample: RECENSION_RAW_STORE=r2 with an endpoint; bucket falls back to recension-raw.
     env = {
-        "STEMMA_RAW_STORE": "r2",
-        "STEMMA_R2_ENDPOINT": "https://account.r2.cloudflarestorage.com",
+        "RECENSION_RAW_STORE": "r2",
+        "RECENSION_R2_ENDPOINT": "https://account.r2.cloudflarestorage.com",
         "AWS_ACCESS_KEY_ID": "test",
         "AWS_SECRET_ACCESS_KEY": "test",
     }
@@ -261,14 +261,62 @@ def test_raw_store_from_env_builds_r2_store_from_endpoint_and_bucket(tmp_path):
 
 @pytest.mark.parametrize(
     "env",
-    [{"STEMMA_RAW_STORE": "s3"}, {"STEMMA_RAW_STORE": "r2"}],
+    [{"RECENSION_RAW_STORE": "s3"}, {"RECENSION_RAW_STORE": "r2"}],
     ids=["unknown-backend", "r2-without-endpoint"],
 )
 def test_raw_store_from_env_rejects_unknown_or_incomplete_configuration(tmp_path, env):
-    # Sample: an unsupported backend name, and r2 with no STEMMA_R2_ENDPOINT.
+    # Sample: an unsupported backend name, and r2 with no RECENSION_R2_ENDPOINT.
     # Both must fail loudly instead of silently writing somewhere else.
     with pytest.raises(ValueError):
         raw_store_from_env(env, local_root=tmp_path)
+
+
+def test_raw_store_from_env_uses_recension_r2_bucket_when_set(tmp_path):
+    # Sample: r2 with RECENSION_R2_BUCKET=recension-raw-staging. An explicit bucket
+    # overrides the default.
+    env = {
+        "RECENSION_RAW_STORE": "r2",
+        "RECENSION_R2_ENDPOINT": "https://account.r2.cloudflarestorage.com",
+        "RECENSION_R2_BUCKET": "recension-raw-staging",
+        "AWS_ACCESS_KEY_ID": "test",
+        "AWS_SECRET_ACCESS_KEY": "test",
+    }
+    assert raw_store_from_env(env, local_root=tmp_path).bucket == "recension-raw-staging"
+
+
+@pytest.mark.parametrize(
+    ("legacy", "replacement"),
+    [
+        ("STEMMA_RAW_STORE", "RECENSION_RAW_STORE"),
+        ("STEMMA_R2_ENDPOINT", "RECENSION_R2_ENDPOINT"),
+        ("STEMMA_R2_BUCKET", "RECENSION_R2_BUCKET"),
+    ],
+)
+def test_raw_store_from_env_refuses_legacy_stemma_variable_and_names_its_replacement(
+    tmp_path, legacy, replacement
+):
+    # Sample: a stale .env from before ADR-011 that sets only the old name, e.g.
+    # STEMMA_RAW_STORE=r2. Ignoring it would silently fall back to the local store, so
+    # the factory must refuse and say which variable to use instead.
+    with pytest.raises(ValueError, match=f"{legacy} was renamed {replacement}"):
+        raw_store_from_env({legacy: "r2"}, local_root=tmp_path)
+
+
+def test_raw_store_from_env_refuses_legacy_variable_even_when_replacement_is_set(tmp_path):
+    # Sample: a half-migrated .env with both STEMMA_RAW_STORE=r2 and
+    # RECENSION_RAW_STORE=local. Which one is meant is ambiguous, so neither is guessed.
+    env = {"STEMMA_RAW_STORE": "r2", "RECENSION_RAW_STORE": "local"}
+    with pytest.raises(ValueError, match="STEMMA_RAW_STORE was renamed RECENSION_RAW_STORE"):
+        raw_store_from_env(env, local_root=tmp_path)
+
+
+def test_raw_store_from_env_legacy_error_never_echoes_the_variable_value(tmp_path):
+    # Sample: STEMMA_R2_ENDPOINT holding an account-specific URL. The error names the
+    # variable only, so the account ID never lands in logs or CI output.
+    endpoint = "https://0123456789abcdef.r2.cloudflarestorage.com"
+    with pytest.raises(ValueError) as excinfo:
+        raw_store_from_env({"STEMMA_R2_ENDPOINT": endpoint}, local_root=tmp_path)
+    assert "0123456789abcdef" not in str(excinfo.value)
 
 
 def test_local_write_latest_replaces_the_pointer_and_only_the_pointer(tmp_path):
