@@ -64,6 +64,6 @@ stemma/
 │   └── integration/              # (planned) Cross-module pipeline tests against fixtures
 │
 └── docs/
-    ├── ROADMAP.md                # Maturity stages 0–4 with exit criteria; one milestone per stage (ADR-009)
+    ├── ROADMAP.md                # Maturity stages 0–7 with exit criteria; one milestone per stage (ADR-009)
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
     └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-010)
