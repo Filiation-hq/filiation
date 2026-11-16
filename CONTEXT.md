@@ -51,8 +51,11 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 - **Class III:** Products that violate FDA law but are unlikely to cause adverse health consequences.
 
 ### openFDA Recall Fields
+- `product_res_number`: Identifier of one recalled product within a recall event (e.g. `Z-0001-04`); the key of `RecallRecord` (ADR-012). Present on every device/recall record and never repeated (all 59,705 records in the 2026-11-13 export).
 - `res_event_number`: Unique identifier for the recall *event*. A single event can span dozens of product lines and multiple K-numbers. Deduplication at the event level is essential.
-- `recall_number`: Specific product/lot recall action identifier (e.g. `Z-1234-2023`).
+- `cfres_id`: FDA's internal recall database ID; not carried by `RecallRecord`.
+- `recall_number`: The device/enforcement name for `product_res_number`. device/recall has no field by this name.
+- `classification` (Class I/II/III): Not in device/recall. It comes from device/enforcement, joined on `product_res_number` (#129); until then `RecallRecord.classification` is `None`.
 - `k_numbers`: Array of associated 510(k) clearance numbers (fill rate varies; requires entity normalization).
 - `root_cause_description`: Standardized FDA cause categorization (e.g. *Component design*, *Software design*, *Labeling false/misleading*).
 
