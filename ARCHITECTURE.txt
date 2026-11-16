@@ -7,7 +7,7 @@ stemma/
 ├── RESUME.md                     # Append-only quantified results for pitches and resumes
 ├── Makefile                      # install / install-dev / test / lint / run
 ├── pyproject.toml                # Workspace tool config (ruff / pytest); ships no code (ADR-002)
-├── .gitignore                    # Excludes data/raw/ and data/interim/ at any depth
+├── .gitignore                    # Excludes data/raw/ and data/interim/ at any depth, private plans, and local research_notes/ and reports/
 │
 ├── .github/                      # GitHub config & CI
 │   ├── pull_request_template.md  # Mandatory PR body format (AGENTS.md §8)
