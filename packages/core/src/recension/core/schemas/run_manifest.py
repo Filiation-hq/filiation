@@ -14,6 +14,7 @@ STATUSES = ("stored", "unchanged")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _RUN_ID = re.compile(r"(\d{4}-\d{2}-\d{2})_[A-Za-z0-9-]+")
+_MANIFEST_KEY = re.compile(r"runs/\d{4}-\d{2}-\d{2}_[A-Za-z0-9-]+/manifest\.json")
 
 
 def _check_iso_date(value: str, name: str) -> None:
@@ -103,13 +104,17 @@ class SourceSnapshot:
     export_date: str | None = None
     last_updated: str | None = None
     diff: SourceDiff | None = None
+    targets_from: str | None = None
 
     def __post_init__(self) -> None:
-        """Validates the status, export_date, and openFDA's meta.last_updated.
+        """Validates the status, dates, and the manifest key targets were taken from.
 
         Raises:
-            ValueError: If status is unknown or either date is not YYYY-MM-DD.
+            ValueError: If status is unknown, either date is not YYYY-MM-DD, or targets_from
+                is not a runs/<run_id>/manifest.json key.
         """
+        if self.targets_from is not None and not _MANIFEST_KEY.fullmatch(self.targets_from):
+            raise ValueError(f"targets_from {self.targets_from!r} is not a runs/<run_id>/manifest.json key")
         if self.status not in STATUSES:
             raise ValueError(f"status {self.status!r} not in {STATUSES}")
         if self.export_date is not None:
@@ -196,6 +201,7 @@ class RunManifest:
                 last_updated=s.get("last_updated"),
                 objects=[ManifestObject(**o) for o in s["objects"]],
                 diff=SourceDiff(**s["diff"]) if s.get("diff") else None,
+                targets_from=s.get("targets_from"),
             )
             for s in data["sources"]
         ]

@@ -1,4 +1,4 @@
-"""Unit tests for the weekly export diff in stemma.pipeline.crawler.export_diff (#40).
+"""Unit tests for the weekly export diff in recension.pipeline.crawler.export_diff (#40).
 
 Task map:
     Input: one source's previous and current export zips (one or more partitions each) and
@@ -18,8 +18,8 @@ import json
 
 import pytest
 from openfda_fakes import make_export_zip
-from stemma.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
-from stemma.pipeline.crawler.openfda_bulk import ExportIntegrityError
+from recension.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
+from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError
 
 STRYKER = {"k_number": "K210758", "applicant": "Stryker", "decision_date": "2021-04-15", "openfda": {}}
 CATHETER = {"k_number": "K030123", "applicant": "Example Medical", "decision_date": "2003-05-02"}

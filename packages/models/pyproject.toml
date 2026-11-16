@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stemma-models"
+name = "recension-models"
 version = "0.1.0"
-description = "Survival analysis, features, and backtesting for the Stemma recall-risk score"
+description = "Survival analysis, features, and backtesting for the Recension recall-risk score"
 requires-python = ">=3.10"
 authors = [
     { name = "Alden Reagins" }
@@ -14,4 +14,4 @@ dependencies = []
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["stemma*"]
+include = ["recension*"]

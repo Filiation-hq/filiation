@@ -1,4 +1,4 @@
-"""Unit tests for the run manifest contract in stemma.core.schemas.run_manifest (ADR-010, #42).
+"""Unit tests for the run manifest contract in recension.core.schemas.run_manifest (ADR-010, #42).
 
 Task map:
     Input: the fields of one ingestion run: run id and date, timestamps, commit SHA, writer,
@@ -18,12 +18,17 @@ SourceDiff (#40):
         field count above the amended total; manifests written before diffs existed.
     Invariants: changed_fields serializes in field-name order, so the same diff always
         produces the same JSON.
+targets_from (#88):
+    Input: the manifest key of the 510(k) snapshot a PDF backfill took its targets from.
+    Output: an optional SourceSnapshot field that round-trips through JSON.
+    Edge cases: a key that is not runs/<run_id>/manifest.json (latest.json, path traversal,
+        a run id without a date); manifests written before the field existed.
 """
 
 import json
 
 import pytest
-from stemma.core.schemas.run_manifest import (
+from recension.core.schemas.run_manifest import (
     LatestPointer,
     ManifestObject,
     RunManifest,
@@ -224,3 +229,33 @@ def test_source_diff_rejects_inconsistent_counts(overrides):
     # least one field, and no field can change in more records than were amended.
     with pytest.raises(ValueError):
         make_diff(**overrides)
+
+
+def test_source_snapshot_round_trips_targets_from_through_json():
+    # Sample: the audit manifest of a PDF backfill whose targets came from the 2026-11-18
+    # weekly snapshot. targets_from must survive JSON out and back in.
+    snapshot = SourceSnapshot(source="cdrh", status="stored", objects=[],
+                              targets_from="runs/2026-11-18_43306392741/manifest.json")
+    manifest = make_manifest(sources=[snapshot])
+    loaded = RunManifest.from_dict(json.loads(manifest.to_json()))
+    assert loaded.sources[0].targets_from == "runs/2026-11-18_43306392741/manifest.json"
+
+
+def test_run_manifest_loads_sources_without_targets_from_as_none():
+    # Sample: the default manifest's JSON with no "targets_from" key, as every manifest
+    # written before #88 has. It must load with targets_from None.
+    data = json.loads(make_manifest().to_json())
+    data["sources"][0].pop("targets_from", None)
+    assert RunManifest.from_dict(data).sources[0].targets_from is None
+
+
+@pytest.mark.parametrize(
+    "targets_from",
+    ["latest.json", "runs/../latest.json", "runs/43306392741/manifest.json", "runs/2026-11-18_1/other.json"],
+    ids=["pointer-not-manifest", "path-traversal", "run-id-without-date", "wrong-file"],
+)
+def test_source_snapshot_rejects_a_targets_from_that_is_not_a_manifest_key(targets_from):
+    # Sample: four keys that don't name a write-once run manifest. latest.json moves, so
+    # pointing at it would make the provenance change after the fact.
+    with pytest.raises(ValueError):
+        SourceSnapshot(source="cdrh", status="stored", objects=[], targets_from=targets_from)

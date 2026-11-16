@@ -352,14 +352,14 @@ def test_config_scan_flags_edits_to_guard_files(path):
 )
 def test_config_scan_flags_added_lint_or_coverage_suppressions(line):
     # Sample: a source file gains one suppression comment.
-    path = "packages/core/src/stemma/core/x.py"
+    path = "packages/core/src/recension/core/x.py"
     found = subjects(load_guard().config_violations({path: "y = 1\n"}, {path: f"y = 1\n{line}\n"}))
     assert found == [f"{path}: suppression"]
 
 
 def test_config_scan_ignores_suppressions_that_already_existed():
     # Sample: the noqa line exists on base and head; only an unrelated line changes.
-    path = "packages/core/src/stemma/core/x.py"
+    path = "packages/core/src/recension/core/x.py"
     base = "x = compute()  # noqa: E501\ny = 1\n"
     assert load_guard().config_violations({path: base}, {path: base.replace("y = 1", "y = 2")}) == []
 
@@ -468,10 +468,10 @@ def test_fail_first_counts_parametrized_test_as_failing_if_any_case_fails():
 def test_fail_first_counts_import_error_on_base_as_failing_and_shows_it():
     # Sample: a new test module that imports a module only the PR adds. On base the file
     # fails to collect; every test in it counts as failing, with the import error shown.
-    outcomes = {"t.py": ["collection-error: ModuleNotFoundError: No module named 'stemma.new'"]}
+    outcomes = {"t.py": ["collection-error: ModuleNotFoundError: No module named 'recension.new'"]}
     violations, rows = load_guard().fail_first_violations({"t.py::test_a"}, outcomes)
     assert violations == []
-    assert rows == [("t.py::test_a", "failed", "ModuleNotFoundError: No module named 'stemma.new'")]
+    assert rows == [("t.py::test_a", "failed", "ModuleNotFoundError: No module named 'recension.new'")]
 
 
 def test_fail_first_flags_new_test_that_never_ran_on_base():
@@ -507,14 +507,14 @@ def test_probe_plugin_records_pass_fail_and_collection_error(tmp_path):
 
 def test_commit_order_note_reports_source_committed_before_tests():
     # Sample: commit 1 touches only packages/, commit 2 adds tests.
-    commits = [("aaa1111", ["packages/core/src/stemma/core/x.py"]), ("bbb2222", ["tests/unit/test_x.py"])]
+    commits = [("aaa1111", ["packages/core/src/recension/core/x.py"]), ("bbb2222", ["tests/unit/test_x.py"])]
     note = load_guard().commit_order_note(commits)
     assert note is not None and "aaa1111" in note
 
 
 def test_commit_order_note_is_silent_when_tests_come_first():
     # Sample: the TDD order: tests in commit 1, source in commit 2.
-    commits = [("aaa1111", ["tests/unit/test_x.py"]), ("bbb2222", ["packages/core/src/stemma/core/x.py"])]
+    commits = [("aaa1111", ["tests/unit/test_x.py"]), ("bbb2222", ["packages/core/src/recension/core/x.py"])]
     assert load_guard().commit_order_note(commits) is None
 
 

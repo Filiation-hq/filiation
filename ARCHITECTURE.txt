@@ -1,4 +1,4 @@
-stemma/
+recension/
 ├── AGENTS.md                     # Operating rules for every agent (read first)
 ├── CLAUDE.md / GEMINI.md         # One-line pointers to AGENTS.md for Claude Code / Gemini CLI
 ├── CONTEXT.md                    # Domain glossary (510(k) terms, recall classes, review panels)
@@ -22,37 +22,37 @@ stemma/
 │       ├── tdd-guard.yml         # CI: TDD guard on every PR (AGENTS.md §9)
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
 │
-├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout; raw/ mirrors the stemma-raw R2 bucket keys (ADR-010)
+├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout; raw/ mirrors the recension-raw R2 bucket keys (ADR-010)
 │   ├── raw/                      # [GIT-IGNORED] Raw 510(k) PDFs & openFDA JSON
 │   ├── interim/                  # [GIT-IGNORED] Extracted OCR text & candidate regex matches
 │   └── derived/                  # Parquet/CSV edge lists & release datasets (<100 MB may be committed)
-│       └── releases/             # Output of `stemma-pipeline export-derived`
+│       └── releases/             # Output of `recension-pipeline export-derived`
 │
 ├── packages/                     # One installable package per ownership boundary (ADR-002)
-│   ├── core/                     # stemma-core: shared data contracts and utilities
-│   │   ├── src/stemma/core/
+│   ├── core/                     # recension-core: shared data contracts and utilities
+│   │   ├── src/recension/core/
 │   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls, run_manifest; DuckDB DDL strings
 │   │   │   ├── storage/          # raw_store.py: write-once RawStore, local (data/raw/) and R2 backends (ADR-010)
 │   │   │   ├── utils/            # hashing.py, paths.py (repo-root & data-tier resolution)
-│   │   │   └── data_loader.py    # Loads derived Parquet; `stemma-data` entrypoint
+│   │   │   └── data_loader.py    # Loads derived Parquet; `recension-data` entrypoint
 │   │   └── pyproject.toml        # [remote] extra adds boto3 for R2RawStore
 │   │
-│   ├── pipeline/                 # stemma-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
-│   │   ├── src/stemma/pipeline/
-│   │   │   ├── crawler/          # openFDA bulk-export ingester, weekly export diff, ingestion run + manifest, API client, resumable CDRH PDF crawler, stratified pilot sampler
+│   ├── pipeline/                 # recension-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
+│   │   ├── src/recension/pipeline/
+│   │   │   ├── crawler/          # openFDA bulk-export ingester, weekly export diff, ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (MAUDE planned)
-│   │   │   └── cli.py            # `stemma-pipeline` ingest-openfda | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived
+│   │   │   └── cli.py            # `recension-pipeline` ingest-openfda | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived
 │   │   └── pyproject.toml
 │   │
-│   └── models/                   # stemma-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
-│       ├── src/stemma/models/    # Package root only; subpackages below are (planned)
+│   └── models/                   # recension-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
+│       ├── src/recension/models/    # Package root only; subpackages below are (planned)
 │       │   ├── loader/           # (planned) Ingests Parquet tables from data/derived/
 │       │   ├── features/         # (planned) Time-varying exposure matrices (immortal-time bias safe)
 │       │   ├── survival/         # (planned) Cox PH, product-code effects, ancestor score math
 │       │   ├── backtesting/      # (planned) Temporal out-of-time splits & calibration
-│       │   └── cli.py            # (planned) `stemma-models train`, `stemma-models evaluate`
+│       │   └── cli.py            # (planned) `recension-models train`, `recension-models evaluate`
 │       └── pyproject.toml
 │
 ├── notebooks/                    # Data Science research (title-cell placeholders; owner Alden)

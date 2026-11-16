@@ -11,9 +11,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from stemma.core.schemas.device_nodes import DeviceNode
-from stemma.core.schemas.recalls import RecallRecord
-from stemma.core.utils.paths import get_raw_dir
+from recension.core.schemas.device_nodes import DeviceNode
+from recension.core.schemas.recalls import RecallRecord
+from recension.core.utils.paths import get_raw_dir
+from recension.pipeline.crawler.openfda_bulk import USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class OpenFDAClient:
             params["api_key"] = self.api_key
 
         url = f"{self.BASE_URL}/{endpoint}?{urlencode(params)}"
-        req = Request(url, headers={"User-Agent": "Stemma/0.1.0 (device-lineage-research)"})
+        req = Request(url, headers={"User-Agent": USER_AGENT})
 
         for attempt in range(3):
             try:

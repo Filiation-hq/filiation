@@ -9,17 +9,17 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from stemma.core.schemas.run_manifest import (
+from recension.core.schemas.run_manifest import (
     LatestPointer,
     ManifestObject,
     RunManifest,
     SourceDiff,
     SourceSnapshot,
 )
-from stemma.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
-from stemma.core.utils.hashing import compute_sha256
-from stemma.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
-from stemma.pipeline.crawler.openfda_bulk import (
+from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
+from recension.core.utils.hashing import compute_sha256
+from recension.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
+from recension.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
     ExportResult,
     Opener,
@@ -37,7 +37,7 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _iso(moment: datetime) -> str:
+def iso_utc(moment: datetime) -> str:
     """Formats a UTC datetime as a second-precision ISO string ending in Z.
 
     Args:
@@ -95,7 +95,7 @@ def load_latest_manifest(store: RawStore, work_dir: Path | None = None) -> RunMa
     return RunManifest.from_dict(data)
 
 
-def _fetch_verified(store: RawStore, objects: list[ManifestObject], dest_dir: Path) -> list[Path]:
+def fetch_verified(store: RawStore, objects: list[ManifestObject], dest_dir: Path) -> list[Path]:
     """Copies a snapshot's objects out of the store, checking each against its manifest hash.
 
     Args:
@@ -143,8 +143,8 @@ def _diff_source(
         counts = RecordDiff(added=0, removed=0, amended=0)
     else:
         with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
-            old = _fetch_verified(store, prior.objects, Path(tmp) / "previous")
-            new = _fetch_verified(store, snapshot.objects, Path(tmp) / "current")
+            old = fetch_verified(store, prior.objects, Path(tmp) / "previous")
+            new = fetch_verified(store, snapshot.objects, Path(tmp) / "current")
             counts = diff_exports(RECORD_KEYS[snapshot.source], old, new)
     return SourceDiff(
         previous_run_id=previous.run_id,
@@ -199,8 +199,8 @@ def run_ingestion(
     skeleton = RunManifest(
         run_id=f"{run_date}_{run_suffix}",
         run_date=run_date,
-        started_at=_iso(started),
-        finished_at=_iso(started),
+        started_at=iso_utc(started),
+        finished_at=iso_utc(started),
         commit_sha=commit_sha,
         writer=writer,
     )
@@ -211,7 +211,7 @@ def run_ingestion(
     for source in sources:
         snapshot = _snapshot(ingest_export(source, store, opener=opener, work_dir=work_dir))
         snapshots.append(replace(snapshot, diff=_diff_source(store, snapshot, previous, work_dir)))
-    manifest = replace(skeleton, sources=snapshots, finished_at=_iso(clock()))
+    manifest = replace(skeleton, sources=snapshots, finished_at=iso_utc(clock()))
     store.put_once(manifest.manifest_key, manifest.to_json())
     store.write_latest(LatestPointer.for_manifest(manifest).to_json())
     return manifest

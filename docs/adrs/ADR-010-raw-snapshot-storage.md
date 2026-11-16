@@ -1,7 +1,7 @@
 # ADR-010: Raw snapshot storage on Cloudflare R2
 
 **Date:** 2026-11-12
-**Status:** Proposed (decided by Steven Rocca in the #44 grilling; Alden Reagins must sign off on the run manifest contract)
+**Status:** Proposed (decided by Steven Rocca in the #44 grilling; Alden Reagins must sign off on the run manifest contract). Bucket and env var names amended by ADR-011.
 **Author:** Steven Rocca
 
 ## Decision
@@ -51,6 +51,7 @@ latest.json
 - PDFs are keyed by K-number and content hash, so a re-posted PDF becomes a new version and nothing is copied per run.
 - A missing marker records the UTC date a K-number's PDF returned 404 at every candidate URL (#43, #86). Its key ends in a 12-hex fingerprint of the exact URLs tried (#85), so a marker covers only those URLs. If the crawler's URL patterns change, as when #83 fixed `pdf03/` to `pdf3/`, old markers stop suppressing requests, and the listing alone shows this without reading any marker. The crawl state lives only in the store: a K-number with a PDF is done, and one with a marker is checked again 30 days later if decided within the last year, or 365 days later otherwise. So a crawl resumes on any machine.
 - A run's manifest lists every object in the run (key, SHA-256, size, record count where applicable), plus `export_date`, commit SHA, and run ID (#42).
+- A PDF backfill (`crawl-pdfs --from-latest`, #88) writes an **audit manifest** instead. Its `cdrh` source lists only the PDFs and missing markers that run wrote, and `targets_from` names the 510(k) snapshot manifest it took its targets from (records whose `statement_or_summary` is Summary or blank). It never moves `latest.json`, because it does not describe a full snapshot. The manifest is written even when the crawl fails, is interrupted, or gets SIGTERM, so every object a run wrote is recorded. A hard kill (SIGKILL, power loss) can still leave objects with no manifest; reconciling those is tracked separately.
 
 **Immutability.**
 - Writing to a key that already exists is refused, and a test enforces this.

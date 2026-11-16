@@ -5,7 +5,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from stemma.pipeline.crawler.openfda_bulk import DOWNLOAD_INDEX_URL
+from recension.pipeline.crawler.openfda_bulk import DOWNLOAD_INDEX_URL
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "openfda"
 PARTITION_URL = "https://download.open.fda.gov/device/510k/device-510k-0001-of-0001.json.zip"
