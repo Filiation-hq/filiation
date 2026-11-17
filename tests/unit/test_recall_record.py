@@ -196,6 +196,7 @@ def test_recall_record_rejects_an_availability_date_that_disagrees_with_its_sour
     [
         ([], False),
         (["century_repaired"], False),
+        (["availability_upper_bound"], False),
         (["initiation_conflict"], True),
         (["initiation_invalid"], True),
         (["posted_before_initiated"], True),
@@ -224,7 +225,9 @@ def test_adr_013_vocabularies_list_every_source_and_flag() -> None:
         "recall.event_date_posted", "recall.event_date_created", "enforcement.report_date",
         "enforcement.center_classification_date", "none",
     )
-    assert DATE_FLAGS == ("century_repaired", "initiation_conflict", "initiation_invalid", "posted_before_initiated")
+    assert DATE_FLAGS == (
+        "century_repaired", "initiation_conflict", "initiation_invalid", "posted_before_initiated", "availability_upper_bound"
+    )
 
 
 def test_recalls_ddl_has_the_adr_013_date_columns() -> None:

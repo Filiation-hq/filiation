@@ -30,8 +30,10 @@ AVAILABILITY_SOURCES = (
     "none",
 )
 INITIATION_SOURCES = ("recall.event_date_initiated", "enforcement.recall_initiation_date")
-DATE_FLAGS = ("century_repaired", "initiation_conflict", "initiation_invalid", "posted_before_initiated")
-# A century repair is confirmed by enforcement, so only these keep a recall out of time-to-event durations.
+# availability_upper_bound: the availability date is a back-fill entry date, so the recall was public
+# on or before it (ADR-013 Revision 2); features counting recent recalls must skip it.
+DATE_FLAGS = ("century_repaired", "initiation_conflict", "initiation_invalid", "posted_before_initiated", "availability_upper_bound")
+# A century repair is confirmed and an upper bound never leaks, so only these keep a recall out of durations.
 DURATION_EXCLUDING_FLAGS = frozenset({"initiation_conflict", "initiation_invalid", "posted_before_initiated"})
 
 
