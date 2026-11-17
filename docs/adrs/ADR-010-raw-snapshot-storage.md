@@ -1,11 +1,11 @@
 # ADR-010: Raw snapshot storage on Cloudflare R2
 
 **Date:** 2026-11-12
-**Status:** Proposed (decided by Steven Rocca in the #44 grilling; Alden Reagins must sign off on the run manifest contract). Bucket and env var names amended by ADR-011.
+**Status:** Proposed (decided by Steven Rocca in the #44 grilling; DS must sign off on the run manifest contract). Bucket and env var names amended by ADR-011.
 **Author:** Steven Rocca
 
 ## Decision
-Canonical raw snapshots live in a private Cloudflare R2 bucket, `stemma-raw`. The bucket is write-once, uses one key layout shared by local and remote, and only two writers may write to it: the scheduled GitHub Actions workflow and the backfill job on Steven's Oracle VM, both running code from `main`. Each run is described by a run manifest. Alden reads raw data through a core loader, never through bucket paths.
+Canonical raw snapshots live in a private Cloudflare R2 bucket, `stemma-raw`. The bucket is write-once, uses one key layout shared by local and remote, and only two writers may write to it: the scheduled GitHub Actions workflow and the backfill job on Steven's Oracle VM, both running code from `main`. Each run is described by a run manifest. Data Science reads raw data through a core loader, never through bucket paths.
 
 ## Context
 Stage 1 (#45) runs ingestion weekly on ephemeral GitHub-hosted runners, and raw data is git-ignored, so snapshots need durable storage outside both. Measured 2026-11-12 from `api.fda.gov/download.json`:
@@ -62,7 +62,7 @@ latest.json
 **Retention.** Keep every export, PDF version, and manifest. Review when the bucket passes 100 GB or monthly cost passes the budget. Stage 2b needs point-in-time snapshots, so old weeks are training data, not clutter.
 
 **Read interface.**
-- Alden works from derived Parquet by default.
+- Data Science works from derived Parquet by default.
 - Raw access goes through `load_raw_snapshot(source, as_of=None)` in `stemma-core`. It resolves `latest.json` or the manifest in effect at `as_of`, caches objects under `data/raw/`, and returns paths or DataFrames.
 - The manifest schema lives in `packages/core/src/stemma/core/schemas/` and is a shared contract.
 
@@ -77,7 +77,7 @@ latest.json
 **Credentials.**
 - R2 API tokens are scoped to `stemma-raw`.
 - The writer token (Object Read & Write) is stored as a GitHub Actions secret on an `ingestion` environment restricted to `main`. A copy lives on the Oracle VM for the backfill, outside the repo.
-- Steven and Alden each get a read-only token (Object Read), kept in a git-ignored local `.env`.
+- Each developer gets a read-only token (Object Read), kept in a git-ignored local `.env`.
 - Tokens are rotated every 90 days, and immediately if exposed.
 
 **Cost.**

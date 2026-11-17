@@ -55,7 +55,7 @@ recension/
 │       │   └── cli.py            # (planned) `recension-models train`, `recension-models evaluate`
 │       └── pyproject.toml
 │
-├── notebooks/                    # Data Science research (title-cell placeholders; owner Alden)
+├── notebooks/                    # Data Science research (title-cell placeholders; owner unassigned)
 │   ├── 01_jama_replication.ipynb # 2017–2021 JAMA 6.4x risk ratio verification
 │   ├── 02_survival_baseline.ipynb# Baseline product-code vs ancestor-risk survival curves
 │   └── 03_calibration_check.ipynb# Calibration curves and temporal out-of-time backtests

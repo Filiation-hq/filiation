@@ -1,7 +1,7 @@
 # ADR-008: Scheduled batch ingestion over live ingestion
 
 **Date:** 2026-11-11
-**Status:** Proposed (accepted in conversation by Steven Rocca; pending Alden Reagins review)
+**Status:** Proposed (accepted in conversation by Steven Rocca; pending DS review)
 **Author:** Steven Rocca
 
 ## Decision

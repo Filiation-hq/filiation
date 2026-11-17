@@ -1,7 +1,7 @@
 # ADR-009: Gate modeling on data-quality exit criteria
 
 **Date:** 2026-11-11
-**Status:** Proposed (accepted in conversation by Steven Rocca; requires Alden Reagins agreement, since it changes DS scope)
+**Status:** Proposed (accepted in conversation by Steven Rocca; requires DS agreement, since it changes DS scope)
 **Author:** Steven Rocca
 
 ## Decision
