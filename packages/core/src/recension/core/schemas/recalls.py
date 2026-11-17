@@ -16,11 +16,15 @@ _OPENFDA_FIELDS = (
     "recall_status",
     "event_date_initiated",
     "event_date_posted",
+    "event_date_created",
+    "event_date_terminated",
 )
 
 # ADR-013: where a recall's availability date came from, in fallback order; "none" means no valid date.
+# openFDA publishes the posting date as event_date_created for 13,575 records (2015-2022).
 AVAILABILITY_SOURCES = (
     "recall.event_date_posted",
+    "recall.event_date_created",
     "enforcement.report_date",
     "enforcement.center_classification_date",
     "none",
@@ -44,6 +48,8 @@ class RecallRecord:
     recall_status: str | None = None
     event_date_initiated: str | None = None
     event_date_posted: str | None = None
+    event_date_created: str | None = None  # openFDA's name for the posting date on 13,575 records
+    event_date_terminated: str | None = None
     is_design_related: bool = False
     availability_date: str | None = None  # ISO date the recall counts as known; resolved per ADR-013 (#142)
     availability_source: str | None = None  # one of AVAILABILITY_SOURCES; None until resolved
