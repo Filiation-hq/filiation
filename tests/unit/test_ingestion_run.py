@@ -341,6 +341,30 @@ def test_run_diffs_enforcement_by_recall_number_and_reports_the_reclassified_fie
     assert (diff.added, diff.removed, diff.amended, diff.changed_fields) == (0, 0, 1, {"classification": 1})
 
 
+def test_second_run_diffs_an_enforcement_export_with_a_blank_recall_number_instead_of_failing(tmp_path):
+    # Sample: like the real 2026-11-16 export, enforcement holds a record with recall_number ""
+    # (event 94520, status Ongoing). Run 102's 2026-11-23 export has it Terminated, so the bytes
+    # differ and the diff must run: keyed by its event_id fallback, it is 1 amended record.
+    keyless = {"recall_number": "", "event_id": "94520", "classification": "Not Yet Classified", "status": "Ongoing"}
+    weeks = [[*ENFORCEMENT_RECORDS, keyless], [*ENFORCEMENT_RECORDS, {**keyless, "status": "Terminated"}]]
+    first, second = load_index(), load_index()
+    first["results"]["device"]["enforcement"]["partitions"][0]["records"] = 3
+    second["results"]["device"]["enforcement"]["partitions"][0]["records"] = 3
+    second["results"]["device"]["enforcement"]["export_date"] = "2026-11-23"
+    store = LocalRawStore(tmp_path)
+    for suffix, index, records, clock in (
+        ("101", first, weeks[0], fixed_clock("2026-11-16T06:00:04", "2026-11-16T06:01:10")),
+        ("102", second, weeks[1], next_week()),
+    ):
+        manifest = run_ingestion(
+            ["enforcement"], store, run_suffix=suffix, commit_sha=COMMIT, writer="github-actions",
+            opener=opener_for(fixture_export_zip(), index, enforcement_export_zip(records)), clock=clock,
+        )
+    diff = manifest.sources[0].diff
+    assert (diff.previous_run_id, diff.added, diff.removed, diff.amended) == ("2026-11-16_101", 0, 0, 1)
+    assert diff.changed_fields == {"status": 1}
+
+
 def test_ingest_openfda_cli_ingests_510k_enforcement_and_recall_by_default(tmp_path, monkeypatch):
     # Sample: `recension-pipeline ingest-openfda` with no --source, as the weekly workflow
     # runs it, against the fixture index (510k, recall, and enforcement entries).

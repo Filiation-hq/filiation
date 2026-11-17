@@ -8,7 +8,9 @@ Task map:
     Edge cases: a key-order-only change (not an amendment); a field added to or dropped
         from a record (counts as changed); records spread across several partitions; a
         duplicate key, in one partition or across two; a record with a missing, empty, or
-        non-string key; a record that is not a JSON object; two empty exports.
+        non-string key; a record that is not a JSON object; two empty exports. For sources
+        with a fallback field (enforcement: event_id), a blank key is keyed by the fallback;
+        a blank fallback or two records sharing one still fail.
     Invariants: the same pair of exports always gives the same diff; memory holds one
         digest per key plus field digests for amended records only, never whole exports
         (the real 510(k) export inflates to ~1.6 GB).
@@ -18,7 +20,12 @@ import json
 
 import pytest
 from openfda_fakes import make_export_zip
-from recension.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
+from recension.pipeline.crawler.export_diff import (
+    FALLBACK_KEYS,
+    RECORD_KEYS,
+    RecordDiff,
+    diff_exports,
+)
 from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError
 
 STRYKER = {"k_number": "K210758", "applicant": "Stryker", "decision_date": "2021-04-15", "openfda": {}}
@@ -159,3 +166,51 @@ def test_record_keys_name_the_unique_field_of_each_source():
     # openFDA API (count=<field>.exact tops at 1); enforcement's recall_number verified
     # 2026-11-17 on the full 40,535-record export: present on every record, never repeated.
     assert RECORD_KEYS == {"510k": "k_number", "recall": "product_res_number", "enforcement": "recall_number"}
+
+
+# The real 2026-11-16 enforcement export has one record with recall_number "" (event 94520,
+# "Not Yet Classified"); without a fallback key the second weekly run would fail its diff.
+KEYLESS_ENFORCEMENT = {"recall_number": "", "event_id": "94520", "classification": "Not Yet Classified", "status": "Ongoing"}
+CLASSIFIED_ENFORCEMENT = {"recall_number": "Z-2372-2023", "event_id": "92815", "classification": "Class II", "status": "Ongoing"}
+
+
+def test_fallback_keys_cover_only_enforcement_by_event_id():
+    # Sample: the per-source fallback map. 510k and recall have no blank keys, so they keep
+    # rejecting unkeyable records outright.
+    assert FALLBACK_KEYS == {"enforcement": "event_id"}
+
+
+def test_diff_keys_a_record_with_a_blank_key_by_its_fallback_field(tmp_path):
+    # Sample: the keyless event-94520 record goes from "Ongoing" to "Terminated" between weeks,
+    # next to an unchanged classified record. Keyed as event_id=94520, it is 1 amended record.
+    terminated = {**KEYLESS_ENFORCEMENT, "status": "Terminated"}
+    previous = write_export(tmp_path / "prev.zip", [CLASSIFIED_ENFORCEMENT, KEYLESS_ENFORCEMENT])
+    current = write_export(tmp_path / "cur.zip", [CLASSIFIED_ENFORCEMENT, terminated])
+    diff = diff_exports("recall_number", [previous], [current], fallback_field="event_id")
+    assert diff == RecordDiff(added=0, removed=0, amended=1, changed_fields={"status": 1})
+
+
+def test_diff_counts_a_keyless_record_that_gains_its_key_as_one_removed_and_one_added(tmp_path):
+    # Sample: FDA later assigns event 94520's record the number Z-2043-2024. The old
+    # event_id=94520 key disappears and Z-2043-2024 appears.
+    numbered = {**KEYLESS_ENFORCEMENT, "recall_number": "Z-2043-2024"}
+    previous = write_export(tmp_path / "prev.zip", [KEYLESS_ENFORCEMENT])
+    current = write_export(tmp_path / "cur.zip", [numbered])
+    diff = diff_exports("recall_number", [previous], [current], fallback_field="event_id")
+    assert (diff.added, diff.removed, diff.amended) == (1, 1, 0)
+
+
+def test_diff_rejects_a_record_whose_key_and_fallback_are_both_blank(tmp_path):
+    # Sample: an enforcement record with recall_number "" and no event_id at all.
+    record = {"recall_number": "", "classification": "Class II"}
+    export = write_export(tmp_path / "e.zip", [record])
+    with pytest.raises(ExportIntegrityError, match="event_id"):
+        diff_exports("recall_number", [export], [export], fallback_field="event_id")
+
+
+def test_diff_rejects_two_keyless_records_with_the_same_fallback_value(tmp_path):
+    # Sample: two keyless records both in event 94520; their fallback keys collide.
+    other = {**KEYLESS_ENFORCEMENT, "product_description": "SYR 60ML"}
+    export = write_export(tmp_path / "e.zip", [KEYLESS_ENFORCEMENT, other])
+    with pytest.raises(ExportIntegrityError, match="94520"):
+        diff_exports("recall_number", [export], [export], fallback_field="event_id")
