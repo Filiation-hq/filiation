@@ -155,6 +155,7 @@ def test_diff_exports_rejects_a_key_duplicated_across_partitions(tmp_path):
 
 
 def test_record_keys_name_the_unique_field_of_each_source():
-    # Sample: the two sources ingested weekly. Verified on 2026-11-13 against the openFDA
-    # API: no record lacks the field and none appears twice (count=<field>.exact tops at 1).
-    assert RECORD_KEYS == {"510k": "k_number", "recall": "product_res_number"}
+    # Sample: the three sources ingested weekly. 510k/recall verified 2026-11-13 against the
+    # openFDA API (count=<field>.exact tops at 1); enforcement's recall_number verified
+    # 2026-11-17 on the full 40,535-record export: present on every record, never repeated.
+    assert RECORD_KEYS == {"510k": "k_number", "recall": "product_res_number", "enforcement": "recall_number"}

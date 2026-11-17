@@ -22,6 +22,7 @@ import hashlib
 
 import pytest
 from openfda_fakes import (
+    ENFORCEMENT_URL,
     FIXTURES,
     KEY,
     PARTITION_URL,
@@ -50,6 +51,16 @@ def test_parse_export_listing_reads_export_date_and_partitions_for_510k():
     assert listing.export_date == "2026-11-09"
     assert [(p.url, p.records, p.file_name) for p in listing.partitions] == [
         (PARTITION_URL, 3, "device-510k-0001-of-0001.json.zip")
+    ]
+
+
+def test_parse_export_listing_reads_export_date_and_partitions_for_enforcement():
+    # Sample: download.json fixture; device/enforcement has export_date 2026-11-16 and one
+    # 2-record partition. The real index (2026-11-17) lists 1 partition, 40,535 records, 91.2 MB.
+    listing = parse_export_listing(load_index(), "enforcement")
+    assert listing.export_date == "2026-11-16"
+    assert [(p.url, p.records, p.file_name) for p in listing.partitions] == [
+        (ENFORCEMENT_URL, 2, "device-enforcement-0001-of-0001.json.zip")
     ]
 
 

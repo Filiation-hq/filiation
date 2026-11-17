@@ -12,8 +12,9 @@ from typing import Any
 
 from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
 
-# Verified 2026-11-13 against the openFDA API: present on every record and never repeated.
-RECORD_KEYS = {"510k": "k_number", "recall": "product_res_number"}
+# Present on every record and never repeated: 510k/recall verified 2026-11-13 against the openFDA
+# API, enforcement on the full 2026-11-16 export (#129).
+RECORD_KEYS = {"510k": "k_number", "recall": "product_res_number", "enforcement": "recall_number"}
 
 
 @dataclass(frozen=True)

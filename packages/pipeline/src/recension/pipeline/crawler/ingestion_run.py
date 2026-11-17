@@ -172,7 +172,7 @@ def run_ingestion(
     Each source is diffed against the manifest latest.json names when the run starts.
 
     Args:
-        sources: openFDA sources to ingest, e.g. ["510k", "recall"].
+        sources: openFDA sources to ingest, e.g. ["510k", "recall", "enforcement"].
         store: Raw store to write into.
         run_suffix: Unique id within the day, e.g. the GitHub Actions run id.
         commit_sha: Full SHA of the code that ran.
