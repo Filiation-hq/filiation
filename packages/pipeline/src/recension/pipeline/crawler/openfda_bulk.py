@@ -21,7 +21,12 @@ from recension.core.storage.raw_store import RawStore
 USER_AGENT = "Recension/0.1.0 (device-lineage-research)"
 
 DOWNLOAD_INDEX_URL = "https://api.fda.gov/download.json"
-SOURCES = {"510k": ("device", "510k"), "recall": ("device", "recall")}
+SOURCES = {
+    "510k": ("device", "510k"),
+    "recall": ("device", "recall"),
+    # Carries the recall class (I/II/III) that device/recall lacks (#129).
+    "enforcement": ("device", "enforcement"),
+}
 CHUNK_CHARS = 1 << 20
 
 Opener = Callable[[str], IO[bytes]]
@@ -100,7 +105,7 @@ def parse_export_listing(index: dict[str, Any], source: str) -> ExportListing:
 
     Args:
         index: Parsed download.json.
-        source: "510k" or "recall".
+        source: "510k", "recall", or "enforcement".
 
     Returns:
         ExportListing: The export_date and its partitions.
@@ -375,7 +380,7 @@ def ingest_export(
     Every partition is downloaded and its record count checked before anything is written.
 
     Args:
-        source: "510k" or "recall".
+        source: "510k", "recall", or "enforcement".
         store: Raw store to write into.
         opener: Callable returning a byte stream for a URL; defaults to HTTPS.
         work_dir: Directory for temporary downloads; defaults to the system temp dir.

@@ -18,7 +18,12 @@ from recension.core.schemas.run_manifest import (
 )
 from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
 from recension.core.utils.hashing import compute_sha256
-from recension.pipeline.crawler.export_diff import RECORD_KEYS, RecordDiff, diff_exports
+from recension.pipeline.crawler.export_diff import (
+    FALLBACK_KEYS,
+    RECORD_KEYS,
+    RecordDiff,
+    diff_exports,
+)
 from recension.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
     ExportResult,
@@ -145,7 +150,7 @@ def _diff_source(
         with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
             old = fetch_verified(store, prior.objects, Path(tmp) / "previous")
             new = fetch_verified(store, snapshot.objects, Path(tmp) / "current")
-            counts = diff_exports(RECORD_KEYS[snapshot.source], old, new)
+            counts = diff_exports(RECORD_KEYS[snapshot.source], old, new, FALLBACK_KEYS.get(snapshot.source))
     return SourceDiff(
         previous_run_id=previous.run_id,
         previous_export_date=prior.export_date,
@@ -172,7 +177,7 @@ def run_ingestion(
     Each source is diffed against the manifest latest.json names when the run starts.
 
     Args:
-        sources: openFDA sources to ingest, e.g. ["510k", "recall"].
+        sources: openFDA sources to ingest, e.g. ["510k", "recall", "enforcement"].
         store: Raw store to write into.
         run_suffix: Unique id within the day, e.g. the GitHub Actions run id.
         commit_sha: Full SHA of the code that ran.

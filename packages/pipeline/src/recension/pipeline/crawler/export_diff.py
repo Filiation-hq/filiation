@@ -12,8 +12,11 @@ from typing import Any
 
 from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
 
-# Verified 2026-11-13 against the openFDA API: present on every record and never repeated.
-RECORD_KEYS = {"510k": "k_number", "recall": "product_res_number"}
+# Present on every record and never repeated: 510k/recall verified 2026-11-13 against the openFDA
+# API, enforcement on the full 2026-11-16 export (#129).
+RECORD_KEYS = {"510k": "k_number", "recall": "product_res_number", "enforcement": "recall_number"}
+# Keys records whose RECORD_KEYS field is blank; the 2026-11-16 enforcement export has one such record.
+FALLBACK_KEYS = {"enforcement": "event_id"}
 
 
 @dataclass(frozen=True)
@@ -39,12 +42,16 @@ def _digest(value: Any) -> bytes:
     return hashlib.blake2b(canonical.encode("utf-8"), digest_size=16).digest()
 
 
-def _keyed_records(key_field: str, paths: list[Path]) -> Iterator[tuple[str, dict[str, Any]]]:
+def _keyed_records(
+    key_field: str, paths: list[Path], fallback_field: str | None = None
+) -> Iterator[tuple[str, dict[str, Any]]]:
     """Streams (key, record) pairs from every partition of one export.
 
     Args:
         key_field: Field that identifies a record, e.g. "k_number".
         paths: The export's partition zips.
+        fallback_field: Field that keys a record whose key_field is blank, as
+            "<fallback_field>=<value>"; None rejects such records.
 
     Yields:
         tuple[str, dict[str, Any]]: Each record with its key.
@@ -56,17 +63,25 @@ def _keyed_records(key_field: str, paths: list[Path]) -> Iterator[tuple[str, dic
     for path in paths:
         for record in iter_export_records(path):
             key = record.get(key_field) if isinstance(record, dict) else None
+            if key == "" and fallback_field:
+                fallback = record.get(fallback_field)
+                key = f"{fallback_field}={fallback}" if isinstance(fallback, str) and fallback.strip() else None
+                if key is None:
+                    raise ExportIntegrityError(
+                        f"{path.name}: record with a blank {key_field!r} and no usable {fallback_field!r}"
+                    )
             if not isinstance(key, str) or not key:
                 raise ExportIntegrityError(f"{path.name}: record without a usable {key_field!r}: {key!r}")
             yield key, record
 
 
-def _record_digests(key_field: str, paths: list[Path]) -> dict[str, bytes]:
+def _record_digests(key_field: str, paths: list[Path], fallback_field: str | None) -> dict[str, bytes]:
     """Maps each record's key to the digest of its whole content.
 
     Args:
         key_field: Field that identifies a record.
         paths: The export's partition zips.
+        fallback_field: Field that keys a record whose key_field is blank, or None.
 
     Returns:
         dict[str, bytes]: One digest per key.
@@ -75,32 +90,37 @@ def _record_digests(key_field: str, paths: list[Path]) -> dict[str, bytes]:
         ExportIntegrityError: If a key appears twice or a record can't be keyed.
     """
     digests: dict[str, bytes] = {}
-    for key, record in _keyed_records(key_field, paths):
+    for key, record in _keyed_records(key_field, paths, fallback_field):
         if key in digests:
             raise ExportIntegrityError(f"{key_field} {key!r} appears more than once in the export")
         digests[key] = _digest(record)
     return digests
 
 
-def _field_digests(key_field: str, paths: list[Path], keys: set[str]) -> dict[str, dict[str, bytes]]:
+def _field_digests(
+    key_field: str, paths: list[Path], keys: set[str], fallback_field: str | None
+) -> dict[str, dict[str, bytes]]:
     """Maps each wanted key to per-field digests of its record.
 
     Args:
         key_field: Field that identifies a record.
         paths: The export's partition zips.
         keys: Keys whose records to keep; all others are skipped.
+        fallback_field: Field that keys a record whose key_field is blank, or None.
 
     Returns:
         dict[str, dict[str, bytes]]: Field name to value digest, per wanted key.
     """
     return {
         key: {name: _digest(value) for name, value in record.items()}
-        for key, record in _keyed_records(key_field, paths)
+        for key, record in _keyed_records(key_field, paths, fallback_field)
         if key in keys
     }
 
 
-def diff_exports(key_field: str, previous: list[Path], current: list[Path]) -> RecordDiff:
+def diff_exports(
+    key_field: str, previous: list[Path], current: list[Path], fallback_field: str | None = None
+) -> RecordDiff:
     """Compares two exports of one source record by record.
 
     Records are matched on key_field. A record is amended when its content differs in any
@@ -112,6 +132,8 @@ def diff_exports(key_field: str, previous: list[Path], current: list[Path]) -> R
         key_field: Field that identifies a record, from RECORD_KEYS.
         previous: Partition zips of the previous run's export.
         current: Partition zips of this run's export.
+        fallback_field: Field from FALLBACK_KEYS that keys records whose key_field is blank;
+            None rejects them.
 
     Returns:
         RecordDiff: Added, removed, and amended counts, and changed fields in name order.
@@ -120,14 +142,14 @@ def diff_exports(key_field: str, previous: list[Path], current: list[Path]) -> R
         ExportIntegrityError: If either export has a duplicate key, an unkeyable record, or
             malformed JSON.
     """
-    before = _record_digests(key_field, previous)
-    after = _record_digests(key_field, current)
+    before = _record_digests(key_field, previous, fallback_field)
+    after = _record_digests(key_field, current, fallback_field)
     amended = {key for key in before.keys() & after.keys() if before[key] != after[key]}
 
     changed: Counter[str] = Counter()
     if amended:
-        old_fields = _field_digests(key_field, previous, amended)
-        new_fields = _field_digests(key_field, current, amended)
+        old_fields = _field_digests(key_field, previous, amended, fallback_field)
+        new_fields = _field_digests(key_field, current, amended, fallback_field)
         for key in amended:
             old, new = old_fields[key], new_fields[key]
             changed.update(name for name in old.keys() | new.keys() if old.get(name) != new.get(name))

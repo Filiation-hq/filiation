@@ -29,6 +29,18 @@
           }
         ],
         "total_records": 2
+      },
+      "enforcement": {
+        "export_date": "2026-11-16",
+        "partitions": [
+          {
+            "display_name": "/device/enforcement data",
+            "file": "https://download.open.fda.gov/device/enforcement/device-enforcement-0001-of-0001.json.zip",
+            "size_mb": "0.01",
+            "records": 2
+          }
+        ],
+        "total_records": 2
       }
     }
   }
