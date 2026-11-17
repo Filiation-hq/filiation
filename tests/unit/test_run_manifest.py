@@ -78,7 +78,7 @@ def make_manifest(**overrides) -> RunManifest:
 
 
 def test_run_manifest_round_trips_through_json_unchanged():
-    # Sample: the manifest posted for Alden's review on #42 (real 2026-11-09 export SHA,
+    # Sample: the manifest posted for DS review on #42 (real 2026-11-09 export SHA,
     # size, and record count). JSON out and back in must give an equal manifest.
     manifest = make_manifest()
     assert RunManifest.from_dict(json.loads(manifest.to_json())) == manifest
