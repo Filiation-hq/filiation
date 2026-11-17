@@ -1,8 +1,8 @@
 # ADR-007: Survival analysis library for packages/models
 
 **Date:** 2026-11-11
-**Status:** Proposed, deferred to Stage 2b by ADR-009 (drafted by DE for DS review; Alden Reagins owns the decision)
-**Author:** Steven Rocca (draft), Alden Reagins (decision owner)
+**Status:** Proposed, deferred to Stage 2b by ADR-009 (drafted by DE for DS review; the DS owner makes the decision)
+**Author:** Steven Rocca (draft); decision owned by DS
 
 ## Decision (proposed)
 Use **lifelines** for the baseline Cox PH and time-varying exposure models, with cluster-robust standard errors by product code. Treat true product-code **frailty** as a separate, later decision: only if the baseline shows clustering that robust errors can't handle, evaluate R `coxme` (via `rpy2` or a separate R step) in a superseding ADR.

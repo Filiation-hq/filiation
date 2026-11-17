@@ -30,6 +30,6 @@ None.
 - [ ] Edge cases listed above are handled in code and each is tested (or untested with a reason)
 - [ ] Test names say exactly what they test; sample data commented
 - [ ] One-sentence docstrings with params and return types
-- [ ] Labels applied; owner label matches (`de/steven`, `ds/alden`, `shared`)
+- [ ] Labels applied; owner label matches (`de/steven`, `ds`, `shared`)
 - [ ] Docs updated (`ARCHITECTURE.txt`, `README.md`, `CONTEXT.md`, ADR, `RESUME.md`) or N/A
 - [ ] No AI attribution; no data, secrets, or generated files

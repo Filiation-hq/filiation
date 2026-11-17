@@ -1,7 +1,7 @@
 # ADR-011: Rename the project from Stemma to Recension
 
 **Date:** 2026-11-15
-**Status:** Proposed (decided by Steven Rocca on 2026-11-15; Alden Reagins to sign off)
+**Status:** Proposed (decided by Steven Rocca on 2026-11-15; DS to sign off)
 **Author:** Steven Rocca
 
 ## Decision

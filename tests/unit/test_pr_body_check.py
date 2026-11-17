@@ -149,8 +149,8 @@ def test_generated_with_footer_is_reported():
 
 
 def test_human_co_author_trailer_is_allowed():
-    # Sample: a Co-Authored-By trailer for Alden, a human developer. Must not be flagged.
-    body = VALID_BODY + "\nCo-Authored-By: Alden Reagins <alden@example.com>\n"
+    # Sample: a Co-Authored-By trailer for a human developer. Must not be flagged.
+    body = VALID_BODY + "\nCo-Authored-By: Jordan Lee <jordan@example.com>\n"
     assert load_checker().find_violations(body) == []
 
 
