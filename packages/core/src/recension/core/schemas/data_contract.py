@@ -41,7 +41,11 @@ CREATE TABLE IF NOT EXISTS recalls (
     recall_status VARCHAR,
     event_date_initiated DATE,
     event_date_posted DATE,
-    is_design_related BOOLEAN
+    is_design_related BOOLEAN,
+    availability_date DATE,
+    availability_source VARCHAR,
+    initiation_date_source VARCHAR,
+    date_flags VARCHAR[]
 );
 """
 
