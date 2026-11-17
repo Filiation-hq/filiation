@@ -1,7 +1,7 @@
 # ADR-013: Define a recall's availability date and repair only cross-confirmed dates
 
 **Date:** 2026-11-17
-**Status:** Proposed (decided by Steven Rocca; DS sign-off pending while the role is unassigned). Revised 2026-11-17 before implementation merged: see "Revision 1".
+**Status:** Proposed (decided by Steven Rocca; DS sign-off pending while the role is unassigned). Revised 2026-11-17 before implementation merged: see "Revision 1" and "Revision 2".
 **Author:** Steven Rocca
 
 ## Decision
@@ -40,6 +40,21 @@ Changes:
 - The weekly report lists the five busiest raw entry days, so a new back-fill is visible even when its dates are rejected.
 
 Result on the 2026-11-16 exports: 46,025 posted, 13,456 created, 43 enforcement `report_date`, 181 none.
+
+## Revision 2 (2026-11-17, during #142): back-fill dates as flagged upper bounds
+Revision 1 left 181 recalls undated. That dropped them from every label, including the 102 that link to K-numbers. A back-fill date is still the latest date by which the recall was certainly public. Using it can make a recall look late, but never early, so it cannot leak.
+
+Changes:
+- When the posting date is rejected **only** as `after_termination` and no enforcement fallback is valid, the back-fill date becomes the availability date. Its source is the entry field, and it gets the flag `availability_upper_bound`. Any other rejection (unparseable, future-dated, before MDA) still gives `none`.
+- `availability_upper_bound` does not exclude a recall from durations. Its initiation date is unaffected.
+- **Features that count recent recalls must skip flagged dates.** Clamping puts back-filled recalls on one day per firm: 20 for one firm on 2004-07-20, and 54 recalls in 6 firm-day clusters of 5 or more. Recall-velocity features would read those as a recall wave (#93, #96).
+- cfRES (#138) replaces these bounds with original dates where it has them.
+
+How late the bounds are, against a normal posting lag of 78 days (p90 315) for recalls initiated 2001–2011:
+- 104 land a median of 156–279 days after initiation.
+- 77 (the 2015 batch) land 4.5–8 years after.
+
+Result: 46,129 posted, 13,533 created (of which 181 are upper bounds), 43 enforcement `report_date`, 0 none.
 
 ## Options Considered
 **Availability date:**
@@ -94,6 +109,7 @@ The max must run after validation. If it ran first, one future-dated typo (say `
   - any other disagreement with enforcement (`initiation_conflict`);
   - an initiation date that fails the validity rules above (`initiation_invalid`);
   - a valid posted date before a trusted initiation date (`posted_before_initiated`).
+- A back-fill date kept as the availability date (Revision 2) is flagged `availability_upper_bound`. It stays in durations, and recall-velocity features skip it.
 
 All counts are reported per run in the field-completeness report (#92).
 
