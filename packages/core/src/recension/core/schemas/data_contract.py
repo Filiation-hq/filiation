@@ -31,9 +31,9 @@ CREATE TABLE IF NOT EXISTS predicate_edges (
 
 CREATE_TABLE_RECALLS = """
 CREATE TABLE IF NOT EXISTS recalls (
+    product_res_number VARCHAR PRIMARY KEY,
     res_event_number VARCHAR NOT NULL,
-    recall_number VARCHAR PRIMARY KEY,
-    classification VARCHAR NOT NULL,
+    classification VARCHAR,
     k_numbers VARCHAR[],
     product_description VARCHAR,
     root_cause_description VARCHAR,
@@ -48,11 +48,11 @@ CREATE TABLE IF NOT EXISTS recalls (
 CREATE_TABLE_DEVICE_RECALL_LINKS = """
 CREATE TABLE IF NOT EXISTS device_recall_links (
     k_number VARCHAR NOT NULL,
+    product_res_number VARCHAR NOT NULL,
     res_event_number VARCHAR NOT NULL,
-    recall_number VARCHAR NOT NULL,
-    classification VARCHAR NOT NULL,
+    classification VARCHAR,
     event_date_initiated DATE,
     is_design_related BOOLEAN,
-    PRIMARY KEY (k_number, recall_number)
+    PRIMARY KEY (k_number, product_res_number)
 );
 """

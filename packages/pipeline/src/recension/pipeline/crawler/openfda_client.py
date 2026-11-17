@@ -100,20 +100,4 @@ class OpenFDAClient:
             params["search"] = search
 
         data = self._make_request("recall.json", params)
-        records: list[RecallRecord] = []
-        for item in data.get("results", []):
-            records.append(
-                RecallRecord(
-                    res_event_number=item.get("res_event_number", ""),
-                    recall_number=item.get("recall_number", ""),
-                    classification=item.get("product_res_number", item.get("root_cause_description", "Class II")),
-                    k_numbers=item.get("k_numbers", []),
-                    product_description=item.get("product_description"),
-                    root_cause_description=item.get("root_cause_description"),
-                    reason_for_recall=item.get("reason_for_recall"),
-                    recall_status=item.get("status"),
-                    event_date_initiated=item.get("event_date_initiated"),
-                    event_date_posted=item.get("event_date_posted"),
-                )
-            )
-        return records
+        return [RecallRecord.from_openfda(item) for item in data.get("results", [])]

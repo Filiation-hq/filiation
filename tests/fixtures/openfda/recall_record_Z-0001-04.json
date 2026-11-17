@@ -1,0 +1,27 @@
+{
+  "action": "An 'Important Safety Notice' dated 10/27/03 was sent to the one direct account on the same date, informing them of the non-compliances with the performance standard and requesting them to call Sedecal at 800-920-9525 to arrange for the modification of the x-ray unit at no cost to the user.",
+  "address_1": "2910 N Arlington Heights Rd",
+  "cfres_id": "30043",
+  "city": "Arlington Heights",
+  "code_info": "serial #PK10058",
+  "distribution_pattern": "Vermont",
+  "event_date_initiated": "2003-10-27",
+  "event_date_posted": "2003-10-29",
+  "event_date_terminated": "2004-03-24",
+  "firm_fei_number": "1000139935",
+  "k_numbers": [
+    "K020436"
+  ],
+  "openfda": {},
+  "postal_code": "60004-1551",
+  "product_code": "IZL--",
+  "product_description": "Sedecal SP-HF 4.0 Portable X-Ray System; Manufactured by SEDECAL, C/Pelya 9 Pol. Ind. Rio De Janeiro, 28110 Algete (Madrid) Spain",
+  "product_quantity": "1 unit",
+  "product_res_number": "Z-0001-04",
+  "reason_for_recall": "A minimum source-skin-distance of less than 30 cm and not identifying the tube manufacturer on the tube housing label resulted in the SP-HF-4.0 Portable Systems not complying with the U.S. Federal performance standard.",
+  "recall_status": "Terminated",
+  "recalling_firm": "Sedecal USA, Inc",
+  "res_event_number": "27549",
+  "root_cause_description": "Other",
+  "state": "IL"
+}
