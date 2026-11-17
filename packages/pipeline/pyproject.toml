@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Data engineering pipeline for scraping, OCR, extraction, and linkage of FDA 510(k) lineages"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "AGPL-3.0-only"}
 authors = [
     { name = "Steven Rocca" }
 ]

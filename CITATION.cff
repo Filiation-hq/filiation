@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Recension, please cite the specific snapshot you used."
+title: "Recension: the FDA 510(k) predicate lineage graph"
+type: software
+authors:
+  - family-names: Rocca
+    given-names: Steven
+license: AGPL-3.0-only
+repository-code: "https://github.com/stevenrocca3/recension"
+# Add once the first release is published on Zenodo (use the concept DOI):
+# doi: 10.5281/zenodo.XXXXXXX
+keywords:
+  - FDA
+  - 510(k)
+  - predicate device
+  - medical device recalls
+  - data engineering
+abstract: >-
+  A versioned graph of FDA 510(k) predicate relationships extracted from
+  510(k) summary documents, linked to FDA recall records, with every link
+  traced to its source page and extraction accuracy measured by era.
