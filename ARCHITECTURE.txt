@@ -42,8 +42,8 @@ recension/
 │   │   │   ├── crawler/          # openFDA bulk-export ingester, weekly export diff, ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
-│   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage, recall class join from enforcement (MAUDE planned)
-│   │   │   └── cli.py            # `recension-pipeline` ingest-openfda | recall-classes | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived | status
+│   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage, recall class join from enforcement, recall date resolution (ADR-013), weekly recall report (MAUDE planned)
+│   │   │   └── cli.py            # `recension-pipeline` ingest-openfda | recall-report | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived | status
 │   │   └── pyproject.toml
 │   │
 │   └── models/                   # recension-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
