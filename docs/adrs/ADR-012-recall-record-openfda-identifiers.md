@@ -1,7 +1,7 @@
 # ADR-012: Key RecallRecord on openFDA's product_res_number and make classification optional
 
 **Date:** 2026-11-16
-**Status:** Proposed (Alden Reagins must sign off; `packages/core/schemas/` is shared)
+**Status:** Proposed (DS must sign off; `packages/core/schemas/` is shared)
 **Author:** Steven Rocca
 
 ## Decision
