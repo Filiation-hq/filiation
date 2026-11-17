@@ -14,6 +14,12 @@ Edge cases:
 - Blank classification string -> None, never "".
 - to_dict / from_dict round trip -> equal record.
 
+ADR-013 date fields (#142): availability_date, availability_source, initiation_date_source,
+date_flags. Edge cases: unresolved by default; unknown source or flag -> ValueError; a date
+without a real source, or a real source without a date -> ValueError; which flags exclude a
+recall from durations; round trip; DDL columns. event_date_created (the posted date's name for
+13,575 records, 2015-2022) and event_date_terminated are carried so the rules can read them.
+
 Invariants: no field is invented (classification is never guessed); keys are stripped.
 """
 
@@ -27,7 +33,7 @@ from recension.core.schemas.data_contract import (
     CREATE_TABLE_DEVICE_RECALL_LINKS,
     CREATE_TABLE_RECALLS,
 )
-from recension.core.schemas.recalls import RecallRecord
+from recension.core.schemas.recalls import AVAILABILITY_SOURCES, DATE_FLAGS, RecallRecord
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "openfda" / "recall_record_Z-0001-04.json"
 
@@ -103,6 +109,16 @@ def test_from_openfda_reads_an_absent_event_date_posted_as_none() -> None:
     assert RecallRecord.from_openfda(record).event_date_posted is None
 
 
+def test_from_openfda_reads_event_date_created_and_event_date_terminated() -> None:
+    # Sample: the real record Z-0001-04 (terminated 2004-03-24, no event_date_created), and the
+    # same record with posted renamed to created, as openFDA publishes Z-0494-05 and 13,574 others.
+    record = real_record()
+    assert (RecallRecord.from_openfda(record).event_date_created, RecallRecord.from_openfda(record).event_date_terminated) == (None, "2004-03-24")
+    record["event_date_created"] = record.pop("event_date_posted")
+    parsed = RecallRecord.from_openfda(record)
+    assert (parsed.event_date_posted, parsed.event_date_created) == (None, "2003-10-29")
+
+
 def test_from_openfda_reads_recall_status_from_the_recall_status_field() -> None:
     # Sample: the real record, whose status is in recall_status ("Terminated"); the old
     # client read a "status" key that openFDA does not have.
@@ -129,3 +145,92 @@ def test_recalls_ddl_keys_on_product_res_number_and_allows_a_null_classification
     for ddl in (CREATE_TABLE_RECALLS, CREATE_TABLE_DEVICE_RECALL_LINKS):
         assert "recall_number" not in ddl.replace("product_res_number", "")
         assert "classification VARCHAR NOT NULL" not in ddl
+
+
+def resolved(**dates) -> RecallRecord:
+    """Builds the real record Z-0001-04 with the given ADR-013 date fields.
+
+    Args:
+        **dates: Any of availability_date, availability_source, initiation_date_source, date_flags.
+
+    Returns:
+        RecallRecord: The record with those fields set.
+    """
+    return RecallRecord(**{**RecallRecord.from_openfda(real_record()).to_dict(), **dates})
+
+
+def test_from_openfda_leaves_availability_unresolved_until_adr_013_rules_run() -> None:
+    # Sample: the raw record Z-0001-04. Parsing alone must not pick an availability date.
+    rec = RecallRecord.from_openfda(real_record())
+    assert (rec.availability_date, rec.availability_source, rec.initiation_date_source, rec.date_flags) == (None, None, None, [])
+
+
+def test_recall_record_rejects_an_unknown_availability_source() -> None:
+    # Sample: "recall.event_date_initiated" as a source; ADR-013 forbids dating from initiation.
+    with pytest.raises(ValueError, match="availability_source"):
+        resolved(availability_date="2004-01-20", availability_source="recall.event_date_initiated")
+
+
+def test_recall_record_rejects_an_unknown_date_flag() -> None:
+    # Sample: a misspelled flag "century_fixed" instead of "century_repaired".
+    with pytest.raises(ValueError, match="century_fixed"):
+        resolved(date_flags=["century_fixed"])
+
+
+@pytest.mark.parametrize(
+    "dates",
+    [
+        {"availability_date": "2004-01-20", "availability_source": "none"},
+        {"availability_date": None, "availability_source": "enforcement.report_date"},
+        {"availability_date": "2004-01-20", "availability_source": None},
+    ],
+)
+def test_recall_record_rejects_an_availability_date_that_disagrees_with_its_source(dates) -> None:
+    # Sample: a date with source "none", a real source with no date, and a date with no source.
+    with pytest.raises(ValueError, match="availability"):
+        resolved(**dates)
+
+
+@pytest.mark.parametrize(
+    ("flags", "excluded"),
+    [
+        ([], False),
+        (["century_repaired"], False),
+        (["availability_upper_bound"], False),
+        (["initiation_conflict"], True),
+        (["initiation_invalid"], True),
+        (["posted_before_initiated"], True),
+    ],
+)
+def test_recall_record_excludes_conflicting_invalid_or_inverted_dates_from_durations(flags, excluded) -> None:
+    # Sample: one record per ADR-013 flag. A confirmed century repair stays usable; the others don't.
+    assert resolved(date_flags=flags).excluded_from_durations is excluded
+
+
+def test_recall_record_round_trips_resolved_dates_through_to_dict_and_from_dict() -> None:
+    # Sample: Z-1044-2013's resolution: availability 2013-04-02 from the posted date, initiation
+    # repaired from enforcement (raw "0013-03-05").
+    rec = resolved(
+        availability_date="2013-04-02",
+        availability_source="recall.event_date_posted",
+        initiation_date_source="enforcement.recall_initiation_date",
+        date_flags=["century_repaired"],
+    )
+    assert RecallRecord.from_dict(rec.to_dict()) == rec
+
+
+def test_adr_013_vocabularies_list_every_source_and_flag() -> None:
+    # Sample: the allowed values ADR-013 names; label code and reports rely on these strings.
+    assert AVAILABILITY_SOURCES == (
+        "recall.event_date_posted", "recall.event_date_created", "enforcement.report_date",
+        "enforcement.center_classification_date", "none",
+    )
+    assert DATE_FLAGS == (
+        "century_repaired", "initiation_conflict", "initiation_invalid", "posted_before_initiated", "availability_upper_bound"
+    )
+
+
+def test_recalls_ddl_has_the_adr_013_date_columns() -> None:
+    # Sample: the recalls DDL string; a derived table must be able to store resolved dates.
+    for column in ("event_date_created DATE", "event_date_terminated DATE", "availability_date DATE", "availability_source VARCHAR", "initiation_date_source VARCHAR", "date_flags VARCHAR[]"):
+        assert column in CREATE_TABLE_RECALLS

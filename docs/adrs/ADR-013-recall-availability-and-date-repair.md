@@ -1,11 +1,11 @@
 # ADR-013: Define a recall's availability date and repair only cross-confirmed dates
 
 **Date:** 2026-11-17
-**Status:** Proposed (decided by Steven Rocca; DS sign-off pending while the role is unassigned)
+**Status:** Proposed (decided by Steven Rocca; DS sign-off pending while the role is unassigned). Revised 2026-11-17 before implementation merged: see "Revision 1" and "Revision 2".
 **Author:** Steven Rocca
 
 ## Decision
-1. **Availability date (#93).** A recall becomes "known" on device/recall `event_date_posted`. If that date is missing or invalid, the fallback is the **later** of enforcement `report_date` and `center_classification_date`, taken over the valid candidates only. Every recall records which field supplied its date. If no candidate is valid, the availability date stays empty. It is never filled from the initiation date.
+1. **Availability date (#93).** A recall becomes "known" on its device/recall posting date, which openFDA publishes as `event_date_posted` or, for 13,575 records, `event_date_created`. A posting date entered more than 30 days after the recall was terminated is a back-fill and is invalid. If the posting date is missing or invalid, the fallback is the **later** of enforcement `report_date` and `center_classification_date`, taken over the valid candidates only. Every recall records which field supplied its date. If no candidate is valid, the availability date stays empty. It is never filled from the initiation date.
 2. **Bad dates (#92).** Raw data is never changed. In derived data:
    - a century-truncated initiation date is repaired only when enforcement confirms it;
    - any other date conflict, and every recall posted before it was initiated, is kept, flagged, and excluded from time-to-event calculations.
@@ -26,6 +26,35 @@ Measured on the 2026-11-16 exports (59,705 recalls; 40,532 matched to enforcemen
   - 17 have a truncated century (`0013-03-05` vs `20130305`);
   - 3 differ by years (Z-0660-2013, Z-0139-2014, Z-0002-2014).
 - **29 recalls in 17 events are posted before they were initiated**, by a median of 10 days and up to 550.
+
+## Revision 1 (2026-11-17, during #142)
+Profiling the 80 recalls left without a date showed that the premise above was wrong:
+
+- **The 13,575 "missing" posting dates are not missing.** Each of them has `event_date_created` instead, and no record has both fields or neither. `created` matches enforcement's classification date 92% of the time (posted: 86%), is never earlier than it, and lags initiation by a median of 55 days (posted: 52). It is the same date under another name. The enforcement fallback had been dating these recalls a median of 8 days late.
+- **Some entry dates are back-fills.** Single days hold hundreds of records: 693 posted on 2004-07-20, 333 on 2012-01-11, and 89 created on 2015-06-25/26. 376 entry dates fall after the recall's own termination. Outside those batch days, 82 of 99 trail termination by 7 days or less (fast recalls closed just before posting), and 89 by 30 or less. On batch days most trail it by months or years.
+
+Changes:
+- `event_date_created` is read as the posting date when `event_date_posted` is absent. Its source is `recall.event_date_created`, and it gets the same validity checks and the same `posted_before_initiated` flag.
+- An entry date more than 30 days after a valid `event_date_terminated` is rejected as `after_termination`. A missing or invalid termination date skips this check. 224 dates are rejected: 214 on batch days, plus 10 that are years late.
+- Back-filled recalls without an enforcement record keep **no** availability date until cfRES (#138) supplies the original. The alternative, the back-fill date as a flagged upper bound, was rejected: it is years late and would look like a real date. On the 2026-11-16 exports this leaves 181 recalls (0.3%) undated: 77 created and 104 posted back-fills, all initiated 2001–2011.
+- The weekly report lists the five busiest raw entry days, so a new back-fill is visible even when its dates are rejected.
+
+Result on the 2026-11-16 exports: 46,025 posted, 13,456 created, 43 enforcement `report_date`, 181 none.
+
+## Revision 2 (2026-11-17, during #142): back-fill dates as flagged upper bounds
+Revision 1 left 181 recalls undated. That dropped them from every label, including the 102 that link to K-numbers. A back-fill date is still the latest date by which the recall was certainly public. Using it can make a recall look late, but never early, so it cannot leak.
+
+Changes:
+- When the posting date is rejected **only** as `after_termination` and no enforcement fallback is valid, the back-fill date becomes the availability date. Its source is the entry field, and it gets the flag `availability_upper_bound`. Any other rejection (unparseable, future-dated, before MDA) still gives `none`.
+- `availability_upper_bound` does not exclude a recall from durations. Its initiation date is unaffected.
+- **Features that count recent recalls must skip flagged dates.** Clamping puts back-filled recalls on one day per firm: 20 for one firm on 2004-07-20, and 54 recalls in 6 firm-day clusters of 5 or more. Recall-velocity features would read those as a recall wave (#93, #96).
+- cfRES (#138) replaces these bounds with original dates where it has them.
+
+How late the bounds are, against a normal posting lag of 78 days (p90 315) for recalls initiated 2001–2011:
+- 104 land a median of 156–279 days after initiation.
+- 77 (the 2015 batch) land 4.5–8 years after.
+
+Result: 46,129 posted, 13,533 created (of which 181 are upper bounds), 43 enforcement `report_date`, 0 none.
 
 ## Options Considered
 **Availability date:**
@@ -61,11 +90,12 @@ Being a few days late only shifts a recall's label slightly later, which is the 
 - It is on or after 1976-05-28, the Medical Device Amendments.
 - **It is not after the `export_date` of the snapshot it came from.** A future date is a typo by definition.
 - For fallback candidates: it is not before the recall's initiation date, when that initiation date is trusted (not flagged).
+- For posting (entry) dates: it is not more than 30 days after the recall's valid termination date.
 
-Invalid candidates are dropped *before* the max and counted by reason: `unparseable`, `before_mda`, `future_dated`, `before_initiation`.
+Invalid candidates are dropped *before* the max and counted by reason: `unparseable`, `before_mda`, `future_dated`, `before_initiation`, `after_termination`.
 
 **Resolving the availability date:**
-1. If `event_date_posted` is valid, use it. The source is `recall.event_date_posted`.
+1. If the posting date (`event_date_posted`, else `event_date_created`) is valid, use it. The source is whichever field held it.
 2. Otherwise, take the max over the **valid, non-null** subset of {`report_date`, `center_classification_date`}:
    - The source is whichever field won. A tie goes to `report_date`.
    - Null and invalid candidates are never compared. One valid candidate wins on its own.
@@ -79,6 +109,7 @@ The max must run after validation. If it ran first, one future-dated typo (say `
   - any other disagreement with enforcement (`initiation_conflict`);
   - an initiation date that fails the validity rules above (`initiation_invalid`);
   - a valid posted date before a trusted initiation date (`posted_before_initiated`).
+- A back-fill date kept as the availability date (Revision 2) is flagged `availability_upper_bound`. It stays in durations, and recall-velocity features skip it.
 
 All counts are reported per run in the field-completeness report (#92).
 

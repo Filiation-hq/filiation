@@ -27,11 +27,8 @@ from recension.pipeline.crawler.openfda_client import OpenFDAClient
 from recension.pipeline.crawler.pdf_backfill import BackfillError, run_backfill
 from recension.pipeline.crawler.sampler import ERAS, PilotSampler, collect_pilot_pool
 from recension.pipeline.extraction.parser import SummaryParser
-from recension.pipeline.linkage.recall_classes import (
-    ClassificationJoinError,
-    coverage_for_latest,
-    coverage_markdown,
-)
+from recension.pipeline.linkage.recall_classes import ClassificationJoinError
+from recension.pipeline.linkage.recall_report import report_for_latest, report_markdown
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("recension.pipeline")
@@ -177,18 +174,18 @@ def ingest_openfda(
     click.echo(manifest.to_json().decode("utf-8"))
 
 
-@cli.command("recall-classes")
+@cli.command("recall-report")
 @click.option("--format", "fmt", type=click.Choice(["json", "markdown"]), default="json", show_default=True)
-def recall_classes(fmt: str) -> None:
-    """Joins the latest snapshot's recall and enforcement exports and prints class coverage (#129)."""
+def recall_report(fmt: str) -> None:
+    """Prints the latest snapshot's recall class coverage (#129) and resolved dates (ADR-013)."""
     try:
-        run_id, coverage = coverage_for_latest(raw_store_from_env())
+        report = report_for_latest(raw_store_from_env())
     except ClassificationJoinError as exc:
         raise click.ClickException(str(exc)) from exc
     if fmt == "markdown":
-        click.echo(coverage_markdown(run_id, coverage), nl=False)
+        click.echo(report_markdown(report), nl=False)
     else:
-        click.echo(json.dumps({"run_id": run_id, **coverage.to_dict()}, indent=2))
+        click.echo(json.dumps(report.to_dict(), indent=2))
 
 
 @cli.command("sample-pilot")
