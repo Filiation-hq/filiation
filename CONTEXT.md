@@ -56,6 +56,7 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 - `cfres_id`: FDA's internal recall database ID; not carried by `RecallRecord`.
 - `recall_number`: The device/enforcement name for `product_res_number`. device/recall has no field by this name. Blank on 1 of 40,535 enforcement records (2026-11-16 export, event 94520); the weekly diff keys such records by `event_id` instead.
 - `classification` (Class I/II/III): Not in device/recall. It comes from device/enforcement, joined on `product_res_number` (#129). `None` when no enforcement record matches or FDA lists it as "Not Yet Classified". openFDA's enforcement export only holds reports from 2012 on, so recalls initiated before 2012 almost never get a class from it (2026-11-16 exports: 67.9% of all recalls classified; 8.4% of 2011, 100% from 2013). FDA's Medical Device Recalls database (cfRES) does list a class for older recalls: all 34 sampled from 2002–2011 had one, and all 42 sampled from 2012 on matched enforcement (checked 2026-11-17).
+- `event_date_posted`: When FDA posted the recall. Missing for 23% of recalls (most initiated 2015–2021), and equal to enforcement `center_classification_date` in 86% of recalls that have both. Label code reads the **availability date** (ADR-013), not this field.
 - `k_numbers`: Array of associated 510(k) clearance numbers (fill rate varies; requires entity normalization).
 - `root_cause_description`: Standardized FDA cause categorization (e.g. *Component design*, *Software design*, *Labeling false/misleading*).
 
@@ -90,6 +91,7 @@ Under 21 CFR Part 7, FDA classifies recalls into three risk tiers:
 
 - **Recension**: The project's name (ADR-011; formerly Stemma). In textual criticism, a recension is an edition of a text established by comparing its surviving versions against their sources; this project does the same for 510(k) lineages, one versioned snapshot at a time.
 - **Stage**: A roadmap phase (0–7, with Stage 2 split into 2a and 2b) whose start is gated on the previous stage's testable exit criteria, not on a date. See `docs/ROADMAP.md` and ADR-009.
+- **Availability date**: The date a recall is treated as publicly known, for labels and backtests (ADR-013). It is device/recall `event_date_posted` when valid; otherwise the later of the valid enforcement `report_date` and `center_classification_date`; otherwise empty, never the initiation date. Dates after their snapshot's export date or before 1976-05-28 are invalid. Each recall records which field supplied it.
 - **As-of query**: A question answered using only what the raw store had recorded by a given date: records, recalls and graph edges whose snapshot date is on or before it. It is what makes a backtest free of look-ahead (Stage 5).
 - **Snapshot citation**: A reference to one frozen release (its snapshot ID and DOI) that lets anyone reproduce a published number exactly.
 - **Point-in-time vs reconstructed**: A point-in-time value comes from a weekly snapshot taken at that date. A reconstructed value comes from today's openFDA data using event dates, so later amendments may have leaked in. Every metric says which it is.
