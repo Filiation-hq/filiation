@@ -15,8 +15,11 @@ authors = [
 dependencies = [
     "click>=8.0.0",
     "pandas>=2.0.0",
-    "pdfplumber>=0.10.0",
 ]
+
+[project.optional-dependencies]
+# PDF text extraction (ADR-014); without it the parser falls back to pdftotext and warns.
+pdf = ["pdfplumber>=0.10.0"]
 
 [project.scripts]
 recension-pipeline = "recension.pipeline.cli:main"
