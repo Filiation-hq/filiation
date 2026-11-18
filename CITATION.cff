@@ -6,7 +6,7 @@ authors:
   - family-names: Rocca
     given-names: Steven
 license: AGPL-3.0-only
-repository-code: "https://github.com/stevenrocca3/recension"
+repository-code: "https://github.com/recension-hq/recension"
 # Add once the first release is published on Zenodo (use the concept DOI):
 # doi: 10.5281/zenodo.XXXXXXX
 keywords:
