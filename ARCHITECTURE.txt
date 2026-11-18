@@ -11,13 +11,18 @@ recension/
 │
 ├── .github/                      # GitHub config & CI
 │   ├── pull_request_template.md  # Mandatory PR body format (AGENTS.md §8)
+│   ├── public-paths.txt          # Public mirror allowlist; unlisted paths stay private (docs/PUBLIC_MIRROR.md)
+│   ├── public-mailmap.txt        # Identity rewrites for the public mirror
+│   ├── public/                   # README.md and CONTRIBUTING.md as published in the public mirror
 │   ├── scripts/
+│   │   ├── build_public_mirror.sh  # Filters, scans, and tests the public mirror of one commit on main
 │   │   ├── check_pr_body.py      # Validates PR bodies against the template (incl. Edge cases)
 │   │   ├── check_tdd.py          # TDD guard: fail-first on base code, can't-fail tests, weakening, citations
 │   │   ├── ingest_summary.py     # Renders the weekly ingestion job summary from the run manifest
 │   │   └── tdd_probe.py          # pytest plugin recording per-test outcomes for the fail-first run
 │   └── workflows/
 │       ├── ci.yml                # CI: make test + make lint on every PR
+│       ├── publish-public.yml    # Publishes the mirror to recension-hq/recension on v* tags or by hand
 │       ├── ingest.yml            # Weekly openFDA ingestion to R2 (Wed 07:00 UTC + manual), `ingestion` env (ADR-008/010)
 │       ├── tdd-guard.yml         # CI: TDD guard on every PR (AGENTS.md §9)
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
@@ -37,13 +42,15 @@ recension/
 │   │   │   └── data_loader.py    # Loads derived Parquet; `recension-data` entrypoint
 │   │   └── pyproject.toml        # [remote] extra adds boto3 for R2RawStore
 │   │
-│   ├── pipeline/                 # recension-pipeline: Data Engineering (Tesseract OCR, pdfplumber; LLM fallback reserved, ADR-006)
+│   ├── pipeline/                 # recension-pipeline: Data Engineering (Tesseract OCR, pdfplumber via the [pdf] extra (ADR-014); LLM fallback reserved, ADR-006)
 │   │   ├── src/recension/pipeline/
 │   │   │   ├── crawler/          # openFDA bulk-export ingester, weekly export diff, ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage, recall class join from enforcement, recall date resolution (ADR-013), weekly recall report (MAUDE planned)
-│   │   │   └── cli.py            # `recension-pipeline` ingest-openfda | recall-report | fetch-openfda | sample-pilot | crawl-pdfs | extract | export-derived | status
+│   │   │   ├── cli.py            # `recension-pipeline` public commands: ingest-openfda | fetch-openfda | export-derived | status; adds cli_internal's commands when installed
+│   │   │   ├── cli_common.py     # Run identity, SIGTERM handling, and options shared by both command modules
+│   │   │   └── cli_internal.py   # Internal commands, not in the public mirror: recall-report | sample-pilot | crawl-pdfs | extract
 │   │   └── pyproject.toml
 │   │
 │   └── models/                   # recension-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
@@ -68,5 +75,6 @@ recension/
 └── docs/
     ├── ROADMAP.md                # Maturity stages 0–7 with exit criteria; one milestone per stage (ADR-009)
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
+    ├── PUBLIC_MIRROR.md          # Runbook: public mirror setup, publishing, allowlist changes, outside PRs
     ├── bias-register.md          # Overfitting, leakage, and bias factors R01–R46: stage gate, owner, control, issue
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-012)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-014)
