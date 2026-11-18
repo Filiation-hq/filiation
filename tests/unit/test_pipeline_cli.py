@@ -1,61 +1,87 @@
-"""Unit tests for the recension-pipeline click CLI commands.
+"""Unit tests for the public recension-pipeline CLI and how it loads the internal commands.
 
 Task map:
-    Input: CLI arguments plus small JSON fixtures written to a temp dir.
-    Output: exit code 0 and the expected output file.
-    Edge cases: `sample-pilot --input` path, which deserializes DeviceNode records;
-        `extract` over the raw-store PDF layout (cdrh/pdfs/<K-number>/<sha256>.pdf, #43),
-        where the file name is a hash and the K-number is the folder.
-    Invariant: no command touches the network when given local input.
+    Input: the click group in recension.pipeline.cli, and the module that adds internal commands.
+    Output: the public commands always load; the internal ones (PDF crawl, extraction, recall
+        report) load only when recension.pipeline.cli_internal is installed, which it is not in
+        the public mirror.
+    Edge cases: the internal module is absent (public mirror) -> skipped quietly; a module the
+        internal module needs is missing (e.g. pdfplumber without the pdf extra) -> the error
+        propagates rather than hiding commands; cli.py or cli_common.py importing anything
+        outside the public modules -> caught here before it breaks the mirror.
+    Invariant: the public CLI never imports a module the public mirror does not ship.
+
+Tests for the internal commands live in test_cli_internal.py.
 """
 
-import json
+import ast
+from pathlib import Path
 
-from click.testing import CliRunner
-from recension.core.schemas.device_nodes import DeviceNode
-from recension.pipeline.cli import cli
+import click
+import pytest
+from recension.pipeline.cli import INTERNAL_COMMANDS, register_internal_commands
 
-
-def test_sample_pilot_with_input_file_writes_manifest_without_name_error(tmp_path):
-    # Sample: one Era 5 DeviceNode (K210758, Stryker, product code MRN, 2021-04-15)
-    # serialized to input.json. Before the fix, DeviceNode was not imported in cli.py,
-    # so reading --input raised NameError.
-    node = DeviceNode(
-        k_number="K210758",
-        applicant="Stryker Orthopaedics",
-        device_name="Spine Nav",
-        product_code="MRN",
-        decision_date="2021-04-15",
-        review_panel="OR",
-    )
-    input_file = tmp_path / "input.json"
-    input_file.write_text(json.dumps([node.to_dict()]), encoding="utf-8")
-    output_file = tmp_path / "manifest.json"
-
-    result = CliRunner().invoke(
-        cli, ["sample-pilot", "--input", str(input_file), "--output", str(output_file), "--size", "1"]
-    )
-
-    assert result.exception is None, repr(result.exception)
-    assert result.exit_code == 0
-    assert output_file.exists()
+PIPELINE_SRC = Path(__file__).resolve().parents[2] / "packages" / "pipeline" / "src" / "recension" / "pipeline"
+PUBLIC_IMPORTS = (
+    "recension.core.",
+    "recension.pipeline.cli_common",
+    "recension.pipeline.crawler.openfda_bulk",
+    "recension.pipeline.crawler.export_diff",
+    "recension.pipeline.crawler.ingestion_run",
+    "recension.pipeline.crawler.openfda_client",
+)
 
 
-def test_extract_reads_the_raw_store_pdf_layout_and_takes_the_k_number_from_the_folder(tmp_path, monkeypatch):
-    # Sample: two versions of K221020's summary and one of K994060, stored as
-    # <dir>/<K-number>/<sha256>.pdf by crawl-pdfs. Each file must be parsed with its folder's
-    # K-number as the subject, not the hash in its file name.
-    import recension.pipeline.cli as cli_module
+def importer_raising(name: str):
+    """Builds an import function that fails as if the named module were not installed.
 
-    pdfs = tmp_path / "cdrh" / "pdfs"
-    for k_number, sha in [("K221020", "a" * 64), ("K221020", "b" * 64), ("K994060", "c" * 64)]:
-        (pdfs / k_number).mkdir(parents=True, exist_ok=True)
-        (pdfs / k_number / f"{sha}.pdf").write_bytes(b"%PDF-1.4")
-    calls = []
-    monkeypatch.setattr(cli_module.SummaryParser, "parse_pdf", lambda self, path, subject_k=None: calls.append(
-        (path.name[:1], subject_k)) or [])
+    Args:
+        name: The module name the ModuleNotFoundError reports.
 
-    result = CliRunner().invoke(cli, ["extract", "--input", str(pdfs), "--output", str(tmp_path / "edges.json")])
+    Returns:
+        Callable[[str], object]: A stand-in for importlib.import_module.
+    """
 
-    assert result.exit_code == 0, result.output
-    assert sorted(calls) == [("a", "K221020"), ("b", "K221020"), ("c", "K994060")]
+    def import_module(module: str) -> object:
+        raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+
+    return import_module
+
+
+def test_register_internal_commands_skips_quietly_when_the_internal_module_is_absent():
+    # Sample: the public mirror, where recension.pipeline.cli_internal is not shipped. The
+    # public commands must still load, so a missing internal module is not an error.
+    group = click.Group()
+    assert register_internal_commands(group, import_module=importer_raising(INTERNAL_COMMANDS)) is False
+    assert group.commands == {}
+
+
+def test_register_internal_commands_reraises_when_a_module_the_internal_commands_need_is_missing():
+    # Sample: cli_internal is installed but pdfplumber is not (pipeline installed without the
+    # pdf extra). Hiding the commands would look like the public mirror; it must fail loudly.
+    with pytest.raises(ModuleNotFoundError, match="pdfplumber"):
+        register_internal_commands(click.Group(), import_module=importer_raising("pdfplumber"))
+
+
+def test_register_internal_commands_adds_what_the_internal_module_registers():
+    # Sample: a stand-in internal module whose register() adds one command, "crawl-pdfs".
+    class Internal:
+        @staticmethod
+        def register(group: click.Group) -> None:
+            group.add_command(click.Command("crawl-pdfs"))
+
+    group = click.Group()
+    assert register_internal_commands(group, import_module=lambda name: Internal) is True
+    assert list(group.commands) == ["crawl-pdfs"]
+
+
+@pytest.mark.parametrize("module", ["cli.py", "cli_common.py"])
+def test_public_cli_modules_import_only_modules_the_public_mirror_ships(module):
+    # Sample: the import statements of cli.py and cli_common.py, parsed with ast. Each
+    # recension.* import must be core or one of the public pipeline modules; anything else
+    # (CDRH crawler, extraction, linkage) would make the public CLI fail to import.
+    tree = ast.parse((PIPELINE_SRC / module).read_text(encoding="utf-8"))
+    imported = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module]
+    imported += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
+    private = [name for name in imported if name.startswith("recension.") and not name.startswith(PUBLIC_IMPORTS)]
+    assert private == []

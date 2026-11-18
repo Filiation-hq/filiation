@@ -1,38 +1,37 @@
-"""Unified CLI for the Recension data engineering pipeline."""
+"""Unified CLI for the Recension data engineering pipeline.
+
+The public commands live here. Internal commands (PDF crawl, extraction, recall report) are added
+from recension.pipeline.cli_internal when it is installed; the public mirror does not ship it.
+"""
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
-import os
-import signal
-import subprocess
-import sys
-import time
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 
 import click
 import pandas as pd
 from recension.core.data_loader import RecensionDataLoader
-from recension.core.schemas.device_nodes import DeviceNode
 from recension.core.storage.raw_store import raw_store_from_env
 from recension.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
-from recension.pipeline.crawler.cdrh_crawler import CDRHCrawler, CrawlTarget
-from recension.pipeline.crawler.cdrh_crawler import default_opener as cdrh_opener
+from recension.pipeline.cli_common import (
+    commit_option,
+    run_attempt_option,
+    run_id_option,
+    run_identity,
+    writer_option,
+)
 from recension.pipeline.crawler.ingestion_run import run_ingestion
 from recension.pipeline.crawler.openfda_bulk import SOURCES, default_opener
 from recension.pipeline.crawler.openfda_client import OpenFDAClient
-from recension.pipeline.crawler.pdf_backfill import BackfillError, run_backfill
-from recension.pipeline.crawler.sampler import ERAS, PilotSampler, collect_pilot_pool
-from recension.pipeline.extraction.parser import SummaryParser
-from recension.pipeline.linkage.recall_classes import ClassificationJoinError
-from recension.pipeline.linkage.recall_report import report_for_latest, report_markdown
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("recension.pipeline")
-crawl_sleep = time.sleep
+INTERNAL_COMMANDS = "recension.pipeline.cli_internal"
 
 
 @click.group()
@@ -67,84 +66,6 @@ def fetch_openfda(limit: int, recalls: bool, output: str | None) -> None:
     logger.info("Saved %d records to %s", len(data), out_path)
 
 
-def _head_commit() -> str:
-    """Returns the SHA of the checked-out commit.
-
-    Returns:
-        str: Full 40-character SHA from `git rev-parse HEAD`.
-
-    Raises:
-        click.UsageError: If git is unavailable or this is not a repository.
-    """
-    try:
-        return subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise click.UsageError("Pass --commit-sha; git rev-parse HEAD failed") from exc
-
-
-def _run_identity(
-    run_id: str | None, run_attempt: str | None, commit_sha: str | None, writer: str | None
-) -> tuple[str, str, str]:
-    """Resolves a run's id suffix, commit, and writer from options, GitHub Actions, or local defaults.
-
-    Args:
-        run_id: Run id suffix, e.g. GITHUB_RUN_ID.
-        run_attempt: Re-run attempt, e.g. GITHUB_RUN_ATTEMPT.
-        commit_sha: Commit of the code that runs; defaults to git HEAD.
-        writer: "github-actions", "oracle-vm", or "local"; defaults by environment.
-
-    Returns:
-        tuple[str, str, str]: The run suffix, commit SHA, and writer.
-
-    Raises:
-        click.UsageError: If no commit was given and git rev-parse HEAD fails.
-    """
-    in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
-    # GitHub keeps GITHUB_RUN_ID on "Re-run jobs"; the attempt keeps manifest keys unique.
-    suffix = f"{run_id}-{run_attempt}" if run_id and run_attempt else run_id
-    return (
-        suffix or f"local-{int(time.time())}",
-        commit_sha or _head_commit(),
-        writer or ("github-actions" if in_actions else "local"),
-    )
-
-
-run_id_option = click.option("--run-id", envvar="GITHUB_RUN_ID", default=None, help="Run id suffix [env: GITHUB_RUN_ID]")
-run_attempt_option = click.option(
-    "--run-attempt",
-    envvar="GITHUB_RUN_ATTEMPT",
-    default=None,
-    help="Re-run attempt, appended to the run id [env: GITHUB_RUN_ATTEMPT]",
-)
-commit_option = click.option("--commit-sha", envvar="GITHUB_SHA", default=None, help="Code commit [env: GITHUB_SHA]")
-writer_option = click.option(
-    "--writer",
-    type=click.Choice(["github-actions", "oracle-vm", "local"]),
-    default=None,
-    help="Who is writing; defaults to github-actions under Actions, else local",
-)
-
-
-@contextmanager
-def _sigterm_as_exit() -> Iterator[None]:
-    """Turns SIGTERM into SystemExit(143) while active, so cleanup in finally blocks still runs.
-
-    Yields:
-        None: Control to the guarded block; the previous handler is restored afterwards.
-    """
-
-    def handler(signum: int, frame: object) -> None:
-        raise SystemExit(128 + signum)
-
-    previous = signal.signal(signal.SIGTERM, handler)
-    try:
-        yield
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-
-
 @cli.command("ingest-openfda")
 @click.option(
     "--source",
@@ -167,167 +88,11 @@ def ingest_openfda(
     writer: str | None,
 ) -> None:
     """Stores the current openFDA exports write-once and records the run in a manifest."""
-    suffix, commit, who = _run_identity(run_id, run_attempt, commit_sha, writer)
+    suffix, commit, who = run_identity(run_id, run_attempt, commit_sha, writer)
     manifest = run_ingestion(
         list(sources), raw_store_from_env(), run_suffix=suffix, commit_sha=commit, writer=who, opener=default_opener
     )
     click.echo(manifest.to_json().decode("utf-8"))
-
-
-@cli.command("recall-report")
-@click.option("--format", "fmt", type=click.Choice(["json", "markdown"]), default="json", show_default=True)
-def recall_report(fmt: str) -> None:
-    """Prints the latest snapshot's recall class coverage (#129) and resolved dates (ADR-013)."""
-    try:
-        report = report_for_latest(raw_store_from_env())
-    except ClassificationJoinError as exc:
-        raise click.ClickException(str(exc)) from exc
-    if fmt == "markdown":
-        click.echo(report_markdown(report), nl=False)
-    else:
-        click.echo(json.dumps(report.to_dict(), indent=2))
-
-
-@cli.command("sample-pilot")
-@click.option("--size", default=500, help="Total pilot sample size across eras")
-@click.option("--input", "input_path", type=click.Path(), default=None, help="Input 510(k) records JSON")
-@click.option("--output", type=click.Path(), default=None, help="Output manifest JSON path")
-def sample_pilot(size: int, input_path: str | None, output: str | None) -> None:
-    """Generates stratified pilot sample manifest across the 5 regulatory eras."""
-    client = OpenFDAClient()
-    sampler = PilotSampler()
-
-    if input_path and Path(input_path).exists():
-        with open(input_path, encoding="utf-8") as f:
-            raw_data = json.load(f)
-        nodes = [DeviceNode.from_dict(d) for d in raw_data]
-    else:
-        logger.info("Fetching one random page of Summary records per fiscal year from openFDA...")
-        nodes = collect_pilot_pool(client)
-
-    manifest = sampler.sample_nodes(nodes, total_sample_size=size)
-    per_era = size // len(ERAS)
-    for era in ERAS:
-        got = sum(entry["era"] == era for entry in manifest)
-        if got < per_era:
-            logger.warning("%s: %d of %d entries; openFDA returned too few Summary records", era, got, per_era)
-    out_file = Path(output) if output else (get_interim_dir() / "pilot_manifest.json")
-    saved = sampler.save_manifest(manifest, out_file)
-    logger.info("Generated pilot manifest with %d devices across eras: %s", len(manifest), saved)
-
-
-@cli.command("crawl-pdfs")
-@click.option("--manifest", type=click.Path(exists=True, dir_okay=False), default=None, help="Pilot manifest JSON path")
-@click.option("--k-number", default=None, help="Specific K-number to fetch")
-@click.option("--rate-limit", default=1.0, help="Seconds between requests; at least 1.0")
-@click.option(
-    "--from-latest",
-    is_flag=True,
-    help="Crawl every Summary or blank record in the 510(k) snapshot latest.json names, and write an audit manifest",
-)
-@run_id_option
-@run_attempt_option
-@commit_option
-@writer_option
-def crawl_pdfs(
-    manifest: str | None,
-    k_number: str | None,
-    rate_limit: float,
-    from_latest: bool,
-    run_id: str | None,
-    run_attempt: str | None,
-    commit_sha: str | None,
-    writer: str | None,
-) -> None:
-    """Crawls 510(k) summary PDFs into the raw store, resuming from what earlier crawls stored."""
-    if from_latest and (manifest or k_number):
-        raise click.UsageError("--from-latest can't be combined with --manifest or --k-number")
-    if from_latest:
-        _backfill_from_latest(rate_limit, _run_identity(run_id, run_attempt, commit_sha, writer))
-        return
-    if k_number:
-        targets = [CrawlTarget(k_number)]
-    elif manifest:
-        items = json.loads(Path(manifest).read_text(encoding="utf-8"))
-        targets = [CrawlTarget(item["k_number"], item.get("decision_date")) for item in items if "k_number" in item]
-    else:
-        raise click.UsageError("Provide --k-number or --manifest")
-    crawler = _crawler(rate_limit)
-    logger.info("Crawling %d summaries at one request per %.1fs...", len(targets), rate_limit)
-    report = crawler.crawl(targets)
-    click.echo(json.dumps({"counts": report.counts, "outcomes": report.outcomes}, indent=2))
-    # Errors are transient (5xx, 429, network); a rerun resumes and retries only those.
-    if report.counts.get("error"):
-        sys.exit(1)
-
-
-def _crawler(rate_limit: float) -> CDRHCrawler:
-    """Builds the CDRH crawler for the configured raw store.
-
-    Args:
-        rate_limit: Seconds between request starts.
-
-    Returns:
-        CDRHCrawler: Crawler bound to raw_store_from_env().
-
-    Raises:
-        click.BadParameter: If rate_limit is below the crawler's minimum.
-    """
-    try:
-        return CDRHCrawler(raw_store_from_env(), opener=cdrh_opener, sleep=crawl_sleep, min_interval=rate_limit)
-    except ValueError as exc:
-        raise click.BadParameter(str(exc), param_hint="--rate-limit") from exc
-
-
-def _backfill_from_latest(rate_limit: float, identity: tuple[str, str, str]) -> None:
-    """Runs the backfill for the latest 510(k) snapshot, prints its summary, and exits 1 on errors.
-
-    Args:
-        rate_limit: Seconds between request starts.
-        identity: Run suffix, commit SHA, and writer from _run_identity.
-
-    Raises:
-        click.ClickException: If the store has no 510(k) snapshot to take targets from.
-    """
-    suffix, commit, who = identity
-    crawler = _crawler(rate_limit)
-    try:
-        with _sigterm_as_exit():
-            manifest, report = run_backfill(crawler, run_suffix=suffix, commit_sha=commit, writer=who)
-    except BackfillError as exc:
-        raise click.ClickException(str(exc)) from exc
-    errors = sorted(k for k, outcome in report.outcomes.items() if outcome == "error")
-    [source] = manifest.sources
-    summary = {"manifest_key": manifest.manifest_key, "targets_from": source.targets_from, "counts": report.counts, "errors": errors}
-    click.echo(json.dumps(summary, indent=2))
-    if errors:
-        sys.exit(1)
-
-
-@cli.command("extract")
-@click.option("--input", "input_dir", type=click.Path(), default=None, help="PDF directory laid out as <K-number>/<sha256>.pdf")
-@click.option("--output", type=click.Path(), default=None, help="Output JSON path for extracted edges")
-def extract(input_dir: str | None, output: str | None) -> None:
-    """Extracts predicate relationships from PDFs with page citations and confidence scores."""
-    in_path = Path(input_dir) if input_dir else (get_raw_dir() / "cdrh" / "pdfs")
-    out_path = Path(output) if output else (get_interim_dir() / "extracted_edges.json")
-
-    pdf_files = sorted(in_path.glob("*/*.pdf"))
-    logger.info("Found %d PDFs in %s. Running extraction parser...", len(pdf_files), in_path)
-
-    parser = SummaryParser()
-    all_edges = []
-
-    for pdf in pdf_files:
-        edges = parser.parse_pdf(pdf, subject_k=pdf.parent.name)
-        for e in edges:
-            all_edges.append(e.to_dict())
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(all_edges, f, indent=2)
-
-    logger.info("Extracted %d predicate edges across %d PDFs -> %s", len(all_edges), len(pdf_files), out_path)
 
 
 @cli.command("export-derived")
@@ -369,6 +134,34 @@ def status() -> None:
     summary = loader.summary()
     click.echo("=== Recension Data Engineering Status ===")
     click.echo(json.dumps(summary, indent=2))
+
+
+def register_internal_commands(
+    group: click.Group, import_module: Callable[[str], ModuleType] = importlib.import_module
+) -> bool:
+    """Adds the internal commands to the CLI if their module is installed.
+
+    Args:
+        group: The click group to add commands to.
+        import_module: Imports a module by name; replaced in tests.
+
+    Returns:
+        bool: True if the internal commands were added, False if their module is absent.
+
+    Raises:
+        ModuleNotFoundError: If the internal module is installed but a module it needs is not.
+    """
+    try:
+        module = import_module(INTERNAL_COMMANDS)
+    except ModuleNotFoundError as exc:
+        if exc.name != INTERNAL_COMMANDS:
+            raise
+        return False
+    module.register(group)
+    return True
+
+
+register_internal_commands(cli)
 
 
 def main() -> None:
