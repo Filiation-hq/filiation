@@ -1,7 +1,7 @@
 # ADR-015: Reconcile export counts against the export's own metadata with zero tolerance
 
 **Date:** 2026-11-19
-**Status:** Proposed
+**Status:** Accepted
 **Author:** Steven Rocca
 
 ## Decision
