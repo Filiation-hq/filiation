@@ -5,9 +5,12 @@ recension/
 ├── ARCHITECTURE.txt              # This map; also the repo-root marker for get_repo_root() (do not rename)
 ├── README.md                     # Overview, quickstart, CLI usage, data contracts
 ├── RESUME.md                     # Append-only quantified results for pitches and resumes
+├── BUILDINPUBLIC.md              # [PRIVATE] Build-in-public campaign plan (Nov 12; launch schedule superseded by reports/)
+├── reports/                      # [PRIVATE] Research reports: launch plan and post timeline, research-engine strategy, overfitting risks (source of docs/bias-register.md)
+├── research_notes/               # [PRIVATE] Source notes behind each report, one folder per report
 ├── Makefile                      # install / install-dev / test / lint / run
 ├── pyproject.toml                # Workspace tool config (ruff / pytest); ships no code (ADR-002)
-├── .gitignore                    # Excludes data/raw/ and data/interim/ at any depth, private plans, and local research_notes/ and reports/
+├── .gitignore                    # Excludes data/raw/ and data/interim/ at any depth, and VMCONFIG.md (VM address and SSH setup)
 │
 ├── .github/                      # GitHub config & CI
 │   ├── pull_request_template.md  # Mandatory PR body format (AGENTS.md §8)
