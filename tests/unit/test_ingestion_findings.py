@@ -81,13 +81,16 @@ def test_register_rejects_two_different_specs_under_one_check_id():
         module.register(module.CheckSpec("export_counts.total", "report", ("R14",)), registry)
 
 
-def test_register_accepts_the_same_spec_registered_twice():
-    # Sample: an identical spec registered twice in a fresh registry, as on a module re-import.
+def test_register_accepts_an_equal_spec_registered_again_and_keeps_the_first():
+    # Sample: fail/R18 "export_counts.total" registered, then a new but equal CheckSpec object
+    # registered again, as a module re-import builds. The second call must not raise and must
+    # hand back the first object, leaving one entry.
     module = findings()
     registry = {}
-    spec = module.CheckSpec("export_counts.total", "fail", ("R18",))
-    assert module.register(spec, registry) is module.register(spec, registry)
-    assert list(registry) == ["export_counts.total"]
+    first = module.register(module.CheckSpec("export_counts.total", "fail", ("R18",)), registry)
+    again = module.register(module.CheckSpec("export_counts.total", "fail", ("R18",)), registry)
+    assert again is first
+    assert registry == {"export_counts.total": first}
 
 
 def test_finding_to_dict_has_fixed_json_serializable_keys():
