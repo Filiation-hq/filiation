@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-SEVERITIES = ("fail", "report")
-_CHECK_ID = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+")
-_REGISTER_ID = re.compile(r"R\d{2}")
+from recension.core.schemas.run_manifest import check_finding_fields
 
 
 @dataclass(frozen=True)
@@ -27,13 +24,7 @@ class CheckSpec:
             ValueError: If check_id is not dotted lowercase, severity is not "fail" or "report",
                 or a register id is not R plus two digits or appears twice.
         """
-        if not _CHECK_ID.fullmatch(self.check_id):
-            raise ValueError(f"check id {self.check_id!r} must be dotted lowercase, e.g. 'export_counts.total'")
-        if self.severity not in SEVERITIES:
-            raise ValueError(f"severity {self.severity!r} must be one of {SEVERITIES}")
-        bad = [r for r in self.register_ids if not isinstance(r, str) or not _REGISTER_ID.fullmatch(r)]
-        if bad or len(set(self.register_ids)) != len(self.register_ids):
-            raise ValueError(f"register ids {self.register_ids!r} must be distinct ids like 'R18'")
+        check_finding_fields(self.check_id, self.severity, self.register_ids)
 
     def finding(self, subject: str, message: str) -> Finding:
         """Builds a finding of this check against one subject.

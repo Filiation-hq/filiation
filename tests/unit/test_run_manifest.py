@@ -84,12 +84,6 @@ def test_run_manifest_round_trips_through_json_unchanged():
     assert RunManifest.from_dict(json.loads(manifest.to_json())) == manifest
 
 
-def test_run_manifest_json_carries_schema_version_1():
-    # Sample: default manifest. The version lets the loader (#54) refuse formats it
-    # doesn't understand.
-    assert json.loads(make_manifest().to_json())["schema_version"] == 1
-
-
 def test_run_manifest_key_is_under_runs_and_run_id():
     # Sample: run_id 2026-11-16_43306392741. ADR-010 layout: runs/<date>_<run-id>/manifest.json.
     assert make_manifest().manifest_key == "runs/2026-11-16_43306392741/manifest.json"

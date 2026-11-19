@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from recension.core.storage.raw_store import RawStore
+from recension.pipeline.crawler.completeness import ExportProfile
 from recension.pipeline.crawler.findings import CheckSpec, Finding, failures, register
 
 USER_AGENT = "Recension/0.1.0 (device-lineage-research)"
@@ -38,6 +39,7 @@ PARTITION_LIMIT = register(CheckSpec("export_counts.partition_limit", "fail", ("
 SKIP_TILING = register(CheckSpec("export_counts.skip_tiling", "fail", ("R18",)))
 TOTAL_AGREEMENT = register(CheckSpec("export_counts.total_agreement", "fail", ("R18",)))
 TOTAL = register(CheckSpec("export_counts.total", "fail", ("R18",)))
+EXPORT_COUNT_CHECKS = (PARTITION_RECORDS, META_RESULTS, PARTITION_LIMIT, SKIP_TILING, TOTAL_AGREEMENT, TOTAL)
 
 Opener = Callable[[str], IO[bytes]]
 
@@ -102,11 +104,14 @@ class ExportStats:
 
 @dataclass(frozen=True)
 class ExportResult:
-    """Outcome of ingesting one source's export."""
+    """Outcome of ingesting one source's export, with its completeness, the checks run, and their findings."""
 
     source: str
     export_date: str
     partitions: list[PartitionResult] = field(default_factory=list)
+    fields_present: dict[str, int] = field(default_factory=dict)
+    checks: list[str] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
 
 
 def default_opener(url: str) -> IO[bytes]:
@@ -328,11 +333,12 @@ def _open_export(zip_path: Path) -> Iterator[_JsonStream]:
         raise ExportIntegrityError(f"{zip_path.name} is not a valid zip (truncated download?)") from exc
 
 
-def read_export_stats(zip_path: Path) -> ExportStats:
+def read_export_stats(zip_path: Path, profile: ExportProfile | None = None) -> ExportStats:
     """Streams an openFDA export zip to count its records and read meta.last_updated and meta.results.
 
     Args:
         zip_path: Path to a partition zip holding exactly one JSON file.
+        profile: If given, observes every record in the same pass (completeness and date rules).
 
     Returns:
         ExportStats: Record count, meta.last_updated, and the raw meta.results value (None if absent).
@@ -346,6 +352,8 @@ def read_export_stats(zip_path: Path) -> ExportStats:
         for kind, value in _walk_export(stream):
             if kind == "record":
                 count += 1
+                if profile is not None:
+                    profile.observe(value)
             elif isinstance(value, dict):
                 last_updated = value.get("last_updated")
                 meta_results = value.get("results")
@@ -473,7 +481,9 @@ def ingest_export(
 ) -> ExportResult:
     """Downloads one source's current openFDA export, verifies it, and stores it write-once.
 
-    Every partition is downloaded and its counts reconciled before anything is written.
+    Every partition is downloaded and its counts reconciled before anything is written. The
+    same streaming pass profiles field completeness and date rules, which are reported, never
+    fatal (ADR-016).
 
     Args:
         source: "510k", "recall", or "enforcement".
@@ -483,7 +493,8 @@ def ingest_export(
 
     Returns:
         ExportResult: Key, SHA-256, size, record count, and status ("stored" or
-            "unchanged") for each partition.
+            "unchanged") for each partition, plus fields_present, every check id run, and
+            the report findings.
 
     Raises:
         ValueError: If source is unsupported or the index is malformed.
@@ -493,6 +504,7 @@ def ingest_export(
     """
     with opener(DOWNLOAD_INDEX_URL) as response:
         listing = parse_export_listing(json.load(response), source)
+    profile = ExportProfile(source, listing.export_date)
 
     results: list[PartitionResult] = []
     with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
@@ -500,7 +512,7 @@ def ingest_export(
         for partition in listing.partitions:
             path = Path(tmp) / partition.file_name
             sha256, size = _download(partition.url, path, opener)
-            downloads.append((partition, path, sha256, size, read_export_stats(path)))
+            downloads.append((partition, path, sha256, size, read_export_stats(path, profile)))
         if failed := failures(reconcile_export_counts(listing, [stats for *_, stats in downloads])):
             raise ExportIntegrityError("; ".join(f"{f.subject}: {f.message}" for f in failed), failed)
 
@@ -518,4 +530,11 @@ def ingest_export(
                 status = "stored"
             results.append(PartitionResult(key, sha256, size, stats.records, status, stats.last_updated))
 
-    return ExportResult(source=source, export_date=listing.export_date, partitions=results)
+    return ExportResult(
+        source=source,
+        export_date=listing.export_date,
+        partitions=results,
+        fields_present=profile.fields_present,
+        checks=sorted([spec.check_id for spec in EXPORT_COUNT_CHECKS] + profile.checks),
+        findings=profile.findings(),
+    )

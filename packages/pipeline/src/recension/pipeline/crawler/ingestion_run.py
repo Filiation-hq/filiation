@@ -11,6 +11,7 @@ from pathlib import Path
 
 from recension.core.schemas.run_manifest import (
     LatestPointer,
+    ManifestFinding,
     ManifestObject,
     RunManifest,
     SourceDiff,
@@ -62,7 +63,7 @@ def _snapshot(result: ExportResult) -> SourceSnapshot:
 
     Returns:
         SourceSnapshot: "stored" if any partition was newly written, else "unchanged", with the
-            newest meta.last_updated across partitions.
+            newest meta.last_updated across partitions, field completeness, checks, and findings.
     """
     objects = [ManifestObject(p.key, p.sha256, p.size_bytes, p.records) for p in result.partitions]
     status = "stored" if any(p.status == "stored" for p in result.partitions) else "unchanged"
@@ -73,6 +74,9 @@ def _snapshot(result: ExportResult) -> SourceSnapshot:
         objects=objects,
         export_date=result.export_date,
         last_updated=max(dates) if dates else None,
+        fields_present=result.fields_present,
+        checks=result.checks,
+        findings=[ManifestFinding(**f.to_dict()) for f in result.findings],
     )
 
 
