@@ -16,7 +16,9 @@ recension/
 │   ├── pull_request_template.md  # Mandatory PR body format (AGENTS.md §8)
 │   ├── public-paths.txt          # Public mirror allowlist; unlisted paths stay private (docs/PUBLIC_MIRROR.md)
 │   ├── public-mailmap.txt        # Identity rewrites for the public mirror
-│   ├── public/                   # README.md and CONTRIBUTING.md as published in the public mirror
+│   ├── public/                   # README.md and CONTRIBUTING.md as published in the public mirror (renamed into place by the allowlist)
+│   ├── ISSUE_TEMPLATE/
+│   │   └── source-correction.yml # Public issue form: K-number, FDA PDF page, what we published, what the source says
 │   ├── scripts/
 │   │   ├── build_public_mirror.sh  # Filters, scans, and tests the public mirror of one commit on main
 │   │   ├── check_pr_body.py      # Validates PR bodies against the template (incl. Edge cases)
