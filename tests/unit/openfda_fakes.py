@@ -16,6 +16,7 @@ ENFORCEMENT_RECORDS = [
     {"recall_number": "Z-0001-2026", "event_id": "90001", "classification": "Class II", "product_type": "Devices"},
     {"recall_number": "Z-0002-2026", "event_id": "90001", "classification": "Not Yet Classified", "product_type": "Devices"},
 ]
+FIXED_ZIP_TIME = (2026, 11, 9, 0, 0, 0)
 KEY ="openfda/510k/export_date=2026-11-09/device-510k-0001-of-0001.json.zip"
 
 
@@ -29,7 +30,7 @@ def load_index() -> dict:
 
 
 def make_export_zip(entries: dict[str, bytes | str]) -> bytes:
-    """Builds an in-memory zip with the given entries, like openFDA's partition zips.
+    """Builds an in-memory zip with the given entries, like openFDA's partition zips, byte-identical across calls.
 
     Args:
         entries: Mapping of entry name to its uncompressed content.
@@ -40,7 +41,8 @@ def make_export_zip(entries: dict[str, bytes | str]) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in entries.items():
-            archive.writestr(name, data)
+            # A fixed timestamp keeps the bytes, and so the SHA-256, independent of the clock.
+            archive.writestr(zipfile.ZipInfo(name, date_time=FIXED_ZIP_TIME), data, zipfile.ZIP_DEFLATED)
     return buffer.getvalue()
 
 
