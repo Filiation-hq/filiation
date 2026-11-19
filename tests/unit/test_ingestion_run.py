@@ -34,6 +34,7 @@ from openfda_fakes import (
     FIXTURES,
     KEY,
     enforcement_export_zip,
+    export_body,
     fixture_export_zip,
     load_index,
     make_export_zip,
@@ -116,6 +117,7 @@ def test_run_ingestion_leaves_latest_json_in_place_when_a_source_fails(tmp_path)
     run(store)
     index = load_index()
     index["results"]["device"]["510k"]["partitions"][0]["records"] = 4
+    index["results"]["device"]["510k"]["total_records"] = 4
     with pytest.raises(ExportIntegrityError):
         run(store, run_suffix="102", opener=opener_for(fixture_export_zip(), index))
 
@@ -212,8 +214,8 @@ def next_week_opener(records: list[dict]):
     index = load_index()
     entry = index["results"]["device"]["510k"]
     entry["export_date"] = "2026-11-16"
-    entry["partitions"][0]["records"] = len(records)
-    body = json.dumps({"meta": {"last_updated": "2026-11-16"}, "results": records})
+    entry["partitions"][0]["records"] = entry["total_records"] = len(records)
+    body = export_body(records, last_updated="2026-11-16")
     return opener_for(make_export_zip({"device-510k-0001-of-0001.json": body}), index)
 
 
@@ -349,7 +351,9 @@ def test_second_run_diffs_an_enforcement_export_with_a_blank_recall_number_inste
     weeks = [[*ENFORCEMENT_RECORDS, keyless], [*ENFORCEMENT_RECORDS, {**keyless, "status": "Terminated"}]]
     first, second = load_index(), load_index()
     first["results"]["device"]["enforcement"]["partitions"][0]["records"] = 3
+    first["results"]["device"]["enforcement"]["total_records"] = 3
     second["results"]["device"]["enforcement"]["partitions"][0]["records"] = 3
+    second["results"]["device"]["enforcement"]["total_records"] = 3
     second["results"]["device"]["enforcement"]["export_date"] = "2026-11-23"
     store = LocalRawStore(tmp_path)
     for suffix, index, records, clock in (

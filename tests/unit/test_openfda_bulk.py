@@ -124,6 +124,7 @@ def test_ingest_export_raises_and_writes_nothing_when_record_count_disagrees(tmp
     # never become a raw snapshot.
     index = load_index()
     index["results"]["device"]["510k"]["partitions"][0]["records"] = 4
+    index["results"]["device"]["510k"]["total_records"] = 4
     store = LocalRawStore(tmp_path / "raw")
     with pytest.raises(ExportIntegrityError):
         ingest_export("510k", store, opener=opener_for(fixture_export_zip(), index))
@@ -226,3 +227,15 @@ def test_iter_export_records_rejects_an_export_with_no_results_array(tmp_path):
     path.write_bytes(make_export_zip({"x.json": b'{"meta": {}}'}))
     with pytest.raises(ExportIntegrityError):
         list(iter_export_records(path))
+
+
+def test_fixture_export_zip_bytes_do_not_depend_on_the_clock(monkeypatch):
+    # Sample: the 3-record fixture zip built at two wall-clock times 2 s apart. zipfile stamps
+    # entries with the current time by default, so a test that builds "the same" zip twice
+    # across a second boundary saw an ExportConflictError on the rerun of an identical export.
+    import time
+
+    first = fixture_export_zip()
+    real_time = time.time
+    monkeypatch.setattr(time, "time", lambda: real_time() + 2.0)
+    assert fixture_export_zip() == first
