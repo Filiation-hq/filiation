@@ -1,0 +1,55 @@
+name: Source correction
+description: Something Recension published disagrees with the FDA source document.
+title: "Source correction: K"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for checking our work against the source. Every link Recension publishes should trace to an FDA page, so a correction needs the K-number, the FDA document and page, and what that page says.
+
+        Please report what the document says, not a judgment about a device's safety. Don't include confidential client or submission details.
+  - type: input
+    id: k_number
+    attributes:
+      label: K-number
+      description: The 510(k) the correction is about.
+      placeholder: K233783
+    validations:
+      required: true
+  - type: input
+    id: source_url
+    attributes:
+      label: FDA source document
+      description: Link to the FDA PDF or page (for example on accessdata.fda.gov).
+      placeholder: https://www.accessdata.fda.gov/cdrh_docs/pdf23/K233783.pdf
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page and section
+      description: The PDF page number, plus the section heading if it has one.
+      placeholder: "Page 5, Section VII"
+    validations:
+      required: true
+  - type: textarea
+    id: published
+    attributes:
+      label: What Recension published
+      description: What we said, and where (a post, the README, a sample, a dataset field). A link or screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: source_says
+    attributes:
+      label: What the source says
+      description: Quote or paraphrase the passage that shows the correct version.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Optional. Other records affected, or how you found it.
+    validations:
+      required: false

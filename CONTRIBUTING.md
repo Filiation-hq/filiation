@@ -1,10 +1,11 @@
 # Contributing to Recension
 
-Thanks for helping. This repository is the **public mirror** of Recension. Development happens in a private repository, and this one is rebuilt from it at each release. That changes how contributions land.
+Thanks for helping. This repository is the **public mirror** of Recension. Development happens in a private repository, and this one is generated from it every Monday. That changes how contributions land.
 
 ## Issues
 
 Open an issue for:
+- source corrections: something we published disagrees with an FDA document. Use the **Source correction** form;
 - bugs;
 - surprising openFDA data, such as missing fields, odd dates, or records that disagree;
 - questions about the method;
@@ -28,7 +29,7 @@ Please include the snapshot or export date you saw the problem in, and the recor
 
 - Your PR is reviewed here.
 - Once it's approved and the CLA is signed, the patch is applied to the private repository with you credited as a co-author (`Co-authored-by: Your Name <you@example.com>`).
-- The PR is then closed with a link to the issue. Your commit appears here with the next release. This repository's history is rebuilt on every release, so PRs are never merged here directly.
+- The PR is then closed with a link to the issue. Your commit appears here at the next Monday update. This repository is generated from the private one, so PRs are never merged here directly.
 
 ## Licensing of contributions
 
