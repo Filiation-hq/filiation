@@ -2,7 +2,7 @@
 
 > **An open, versioned FDA 510(k) predicate graph with per-link source citations and confidence, plus an explainable recall-risk score.**
 
-This is the **public mirror** of Recension. A new version is published here with each release. Development happens in a private repository, and this repository is generated from it. That's why every release rewrites this repository's history, and why pull requests aren't merged here directly (see [Contributing](#contributing)).
+This is the **public mirror** of Recension. Development happens in a private repository, and this one is generated from it **every Monday**, with tagged releases in between. Each update adds that week's commits on top, so `git pull` works. If the set of published files changes, though, this repository's history is rebuilt, and an existing clone has to be reset to the new `main`. Because it's generated, pull requests aren't merged here directly (see [Contributing](#contributing)).
 
 ## What's here
 
@@ -51,7 +51,7 @@ Use [`CITATION.cff`](CITATION.cff); GitHub's "Cite this repository" button reads
 
 ## Contributing
 
-Issues are welcome: bug reports, data problems you've spotted in openFDA, and questions.
+Issues are welcome: bug reports, data problems you've spotted in openFDA, and questions. If something we published disagrees with an FDA document, use the **Source correction** issue form, with the K-number, the PDF page and what it says.
 
 Pull requests are welcome too. They are reviewed here, then applied to the private repository with credit to you, and arrive in this repository with the next release. Because Recension may also be offered under commercial licenses, outside contributions need a signed contributor license agreement (CLA) before they can be applied. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
