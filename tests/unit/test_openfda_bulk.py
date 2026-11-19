@@ -124,6 +124,7 @@ def test_ingest_export_raises_and_writes_nothing_when_record_count_disagrees(tmp
     # never become a raw snapshot.
     index = load_index()
     index["results"]["device"]["510k"]["partitions"][0]["records"] = 4
+    index["results"]["device"]["510k"]["total_records"] = 4
     store = LocalRawStore(tmp_path / "raw")
     with pytest.raises(ExportIntegrityError):
         ingest_export("510k", store, opener=opener_for(fixture_export_zip(), index))

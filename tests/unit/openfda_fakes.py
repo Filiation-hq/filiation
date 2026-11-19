@@ -29,6 +29,28 @@ def load_index() -> dict:
     return json.loads((FIXTURES / "download.json").read_text(encoding="utf-8"))
 
 
+def export_body(
+    records: list[dict],
+    *,
+    last_updated: str = "2026-11-09",
+    skip: int = 0,
+    total: int | None = None,
+) -> str:
+    """Serializes records in openFDA's export layout with the meta.results block real partitions carry.
+
+    Args:
+        records: Records for the "results" array; their count becomes meta.results.limit.
+        last_updated: Value for meta.last_updated.
+        skip: Offset of this partition's first record within the whole export.
+        total: Whole-export record count; defaults to len(records) for a single partition.
+
+    Returns:
+        str: The export JSON document.
+    """
+    results = {"skip": skip, "limit": len(records), "total": len(records) if total is None else total}
+    return json.dumps({"meta": {"last_updated": last_updated, "results": results}, "results": records})
+
+
 def make_export_zip(entries: dict[str, bytes | str]) -> bytes:
     """Builds an in-memory zip with the given entries, like openFDA's partition zips, byte-identical across calls.
 
@@ -62,7 +84,7 @@ def recall_export_zip() -> bytes:
     Returns:
         bytes: Zip bytes for device-recall-0001-of-0001.json.zip.
     """
-    body = json.dumps({"meta": {}, "results": [{"product_res_number": "Z-0001-2026", "res_event_number": "90001"}, {"product_res_number": "Z-0002-2026", "res_event_number": "90001"}]})
+    body = export_body([{"product_res_number": "Z-0001-2026", "res_event_number": "90001"}, {"product_res_number": "Z-0002-2026", "res_event_number": "90001"}])
     return make_export_zip({"device-recall-0001-of-0001.json": body})
 
 
@@ -75,7 +97,7 @@ def enforcement_export_zip(records: list[dict] | None = None) -> bytes:
     Returns:
         bytes: Zip bytes for device-enforcement-0001-of-0001.json.zip.
     """
-    body = json.dumps({"meta": {}, "results": ENFORCEMENT_RECORDS if records is None else records})
+    body = export_body(ENFORCEMENT_RECORDS if records is None else records)
     return make_export_zip({"device-enforcement-0001-of-0001.json": body})
 
 
@@ -124,3 +146,44 @@ def opener_for(zip_bytes: bytes, index: dict | None = None, enforcement: bytes |
             ENFORCEMENT_URL: enforcement or enforcement_export_zip(),
         }
     )
+
+
+PART_URL = "https://download.open.fda.gov/device/510k/device-510k-{n:04d}-of-0002.json.zip"
+
+
+def records(start: int, count: int) -> list[dict]:
+    """Builds distinct 510(k) records numbered from start.
+
+    Args:
+        start: Number of the first record.
+        count: How many records to build.
+
+    Returns:
+        list[dict]: Records with unique k_number values.
+    """
+    return [{"k_number": f"K{start + i:06d}"} for i in range(count)]
+
+
+def opener_serving(parts: list[tuple[str, str, int]], total_records: int | None | str = "sum") -> FakeOpener:
+    """Serves a 510(k) index listing the given partitions, and each partition's body as a zip.
+
+    Args:
+        parts: (url, export JSON body, records the index lists) per partition, in index order.
+        total_records: Index total_records; "sum" uses the sum of listed records, None omits it.
+
+    Returns:
+        FakeOpener: Opener for the index and every listed partition URL.
+    """
+    index = load_index()
+    entry = index["results"]["device"]["510k"]
+    entry["partitions"] = [{"file": url, "records": listed} for url, _, listed in parts]
+    if total_records == "sum":
+        entry["total_records"] = sum(listed for _, _, listed in parts)
+    elif total_records is None:
+        entry.pop("total_records", None)
+    else:
+        entry["total_records"] = total_records
+    responses = {DOWNLOAD_INDEX_URL: json.dumps(index).encode("utf-8")}
+    for url, body, _ in parts:
+        responses[url] = make_export_zip({url.rsplit("/", 1)[-1].removesuffix(".zip"): body})
+    return FakeOpener(responses)
