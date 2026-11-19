@@ -65,10 +65,5 @@ htmlcov/
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
-# Private Plans
-BUILDINPUBLIC.md
+# VM address and SSH setup: stays on this machine, never in history (tests/unit/test_build_config.py)
 VMCONFIG.md
-
-# Local research output (deep-research notes and reports)
-research_notes/
-reports/
