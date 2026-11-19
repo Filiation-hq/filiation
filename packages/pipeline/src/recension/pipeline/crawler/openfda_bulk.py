@@ -7,7 +7,7 @@ import io
 import json
 import tempfile
 import zipfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from recension.core.storage.raw_store import RawStore
+from recension.pipeline.crawler.findings import CheckSpec, Finding, failures, register
 
 USER_AGENT = "Recension/0.1.0 (device-lineage-research)"
 
@@ -29,11 +30,30 @@ SOURCES = {
 }
 CHUNK_CHARS = 1 << 20
 
+# Count checks control R18: a lost or doubled partition would read as upstream removals or
+# additions in the weekly diff. A missing meta.results is a silently empty field (R14).
+PARTITION_RECORDS = register(CheckSpec("export_counts.partition_records", "fail", ("R18",)))
+META_RESULTS = register(CheckSpec("export_counts.meta_results", "fail", ("R14",)))
+PARTITION_LIMIT = register(CheckSpec("export_counts.partition_limit", "fail", ("R18",)))
+SKIP_TILING = register(CheckSpec("export_counts.skip_tiling", "fail", ("R18",)))
+TOTAL_AGREEMENT = register(CheckSpec("export_counts.total_agreement", "fail", ("R18",)))
+TOTAL = register(CheckSpec("export_counts.total", "fail", ("R18",)))
+
 Opener = Callable[[str], IO[bytes]]
 
 
 class ExportIntegrityError(Exception):
     """Raised when a downloaded export does not match what the download index promises."""
+
+    def __init__(self, message: str, findings: Sequence[Finding] = ()) -> None:
+        """Keeps the failing check findings alongside the message.
+
+        Args:
+            message: Human-readable description of the failure.
+            findings: The "fail" findings that caused it, if it came from declared checks.
+        """
+        super().__init__(message)
+        self.findings = tuple(findings)
 
 
 class ExportConflictError(Exception):
@@ -56,6 +76,7 @@ class ExportListing:
     source: str
     export_date: str
     partitions: list[ExportPartition]
+    total_records: int | None = None
 
 
 @dataclass(frozen=True)
@@ -72,10 +93,11 @@ class PartitionResult:
 
 @dataclass(frozen=True)
 class ExportStats:
-    """What a streamed export reports about itself: its record count and meta.last_updated."""
+    """What a streamed export reports about itself: its record count, meta.last_updated, and meta.results."""
 
     records: int
     last_updated: str | None
+    meta_results: Any = None
 
 
 @dataclass(frozen=True)
@@ -112,7 +134,8 @@ def parse_export_listing(index: dict[str, Any], source: str) -> ExportListing:
 
     Raises:
         ValueError: If source is unsupported or missing from the index, export_date is not
-            YYYY-MM-DD, or the source lists no partitions or a partition with 0 records.
+            YYYY-MM-DD, the source lists no partitions or a partition with 0 records, or
+            total_records is malformed or differs from the partitions' sum.
     """
     if source not in SOURCES:
         raise ValueError(f"Unsupported openFDA source {source!r}; expected one of {sorted(SOURCES)}")
@@ -138,7 +161,27 @@ def parse_export_listing(index: dict[str, Any], source: str) -> ExportListing:
         raise ValueError(f"download.json lists no partitions for {source!r}")
     if empty := [p.file_name for p in partitions if p.records <= 0]:
         raise ValueError(f"download.json lists 0 records for {source!r} partitions {empty}")
-    return ExportListing(source=source, export_date=export_date, partitions=partitions)
+    total_records = entry.get("total_records")
+    if total_records is not None:
+        if not _is_count(total_records):
+            raise ValueError(f"download.json total_records for {source!r} is {total_records!r}, not a count")
+        if total_records != (listed := sum(p.records for p in partitions)):
+            raise ValueError(
+                f"download.json total_records for {source!r} is {total_records}, partitions list {listed}"
+            )
+    return ExportListing(source=source, export_date=export_date, partitions=partitions, total_records=total_records)
+
+
+def _is_count(value: Any) -> bool:
+    """Tells whether a JSON value is a non-negative integer, excluding bools.
+
+    Args:
+        value: Decoded JSON value.
+
+    Returns:
+        bool: True for int values >= 0 that are not True or False.
+    """
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 class _JsonStream:
@@ -230,14 +273,17 @@ def _walk_export(stream: _JsonStream) -> Iterator[tuple[str, Any]]:
         tuple[str, Any]: The top-level meta object, and each record in "results" in order.
 
     Raises:
-        ExportIntegrityError: If the document is malformed or has no top-level "results".
+        ExportIntegrityError: If the document is malformed, has no top-level "results", or
+            repeats "results" or "meta".
     """
-    seen_results = False
+    seen_results = seen_meta = False
     stream.expect("{")
     while stream.peek() != "}":
         key = stream.value()
         stream.expect(":")
         if key == "results" and stream.peek() == "[":
+            if seen_results:
+                raise ExportIntegrityError("Export JSON has more than one top-level 'results' array")
             seen_results = True
             stream.expect("[")
             while stream.peek() != "]":
@@ -246,6 +292,9 @@ def _walk_export(stream: _JsonStream) -> Iterator[tuple[str, Any]]:
                     stream.expect(",")
             stream.expect("]")
         elif key == "meta":
+            if seen_meta:
+                raise ExportIntegrityError("Export JSON has more than one top-level 'meta' object")
+            seen_meta = True
             yield "meta", stream.value()
         else:
             stream.value()
@@ -280,26 +329,73 @@ def _open_export(zip_path: Path) -> Iterator[_JsonStream]:
 
 
 def read_export_stats(zip_path: Path) -> ExportStats:
-    """Streams an openFDA export zip to count its records and read meta.last_updated.
+    """Streams an openFDA export zip to count its records and read meta.last_updated and meta.results.
 
     Args:
         zip_path: Path to a partition zip holding exactly one JSON file.
 
     Returns:
-        ExportStats: Record count and meta.last_updated.
+        ExportStats: Record count, meta.last_updated, and the raw meta.results value (None if absent).
 
     Raises:
         ExportIntegrityError: If the zip does not hold exactly one entry or its JSON is malformed.
     """
     count = 0
-    last_updated = None
+    last_updated = meta_results = None
     with _open_export(zip_path) as stream:
         for kind, value in _walk_export(stream):
             if kind == "record":
                 count += 1
             elif isinstance(value, dict):
                 last_updated = value.get("last_updated")
-    return ExportStats(count, last_updated)
+                meta_results = value.get("results")
+    return ExportStats(count, last_updated, meta_results)
+
+
+def reconcile_export_counts(listing: ExportListing, stats: list[ExportStats]) -> list[Finding]:
+    """Compares every count openFDA states about one export with the records actually streamed.
+
+    The tolerance is zero: the index and the zips come from the same export job, so any
+    difference means a truncated, mixed, or re-published download (#46, ADR-015). Every
+    disagreement is returned, not only the first, so one run diagnoses the whole export.
+
+    Args:
+        listing: The source's download index entry.
+        stats: Streamed stats for each partition, in the listing's order.
+
+    Returns:
+        list[Finding]: One "fail" finding per disagreement; empty when every count agrees.
+    """
+    found: list[Finding] = []
+    spans = []
+    malformed = False
+    for partition, stat in zip(listing.partitions, stats, strict=True):
+        subject = f"{listing.source}/{partition.file_name}"
+        if stat.records != partition.records:
+            found.append(PARTITION_RECORDS.finding(subject, f"index lists {partition.records} records, zip holds {stat.records}"))
+        meta = stat.meta_results
+        if not isinstance(meta, dict) or not all(_is_count(meta.get(k)) for k in ("skip", "limit", "total")):
+            found.append(META_RESULTS.finding(subject, f"meta.results is {meta!r:.200}, expected counts skip, limit, total"))
+            malformed = True
+            continue
+        if meta["limit"] != stat.records:
+            found.append(PARTITION_LIMIT.finding(subject, f"meta.results.limit is {meta['limit']}, zip holds {stat.records}"))
+        spans.append((meta["skip"], stat.records, meta["total"], subject))
+    if malformed:
+        return found
+
+    expected_skip = 0
+    for skip, count, _, subject in sorted(spans):
+        if skip != expected_skip:
+            found.append(SKIP_TILING.finding(subject, f"meta.results.skip is {skip}, expected {expected_skip}"))
+        expected_skip = skip + count
+    streamed = sum(count for _, count, _, _ in spans)
+    totals = sorted({total for _, _, total, _ in spans})
+    if len(totals) > 1:
+        found.append(TOTAL_AGREEMENT.finding(listing.source, f"partitions disagree on meta.results.total: {totals}"))
+    elif totals[0] != streamed:
+        found.append(TOTAL.finding(listing.source, f"meta.results.total is {totals[0]}, partitions hold {streamed} records"))
+    return found
 
 
 def iter_export_records(zip_path: Path) -> Iterator[Any]:
@@ -377,7 +473,7 @@ def ingest_export(
 ) -> ExportResult:
     """Downloads one source's current openFDA export, verifies it, and stores it write-once.
 
-    Every partition is downloaded and its record count checked before anything is written.
+    Every partition is downloaded and its counts reconciled before anything is written.
 
     Args:
         source: "510k", "recall", or "enforcement".
@@ -391,7 +487,8 @@ def ingest_export(
 
     Raises:
         ValueError: If source is unsupported or the index is malformed.
-        ExportIntegrityError: If a partition's record count differs from the index.
+        ExportIntegrityError: If any count the index or a zip's meta.results states differs
+            from the records streamed (see reconcile_export_counts).
         ExportConflictError: If an already-stored export_date now has different bytes.
     """
     with opener(DOWNLOAD_INDEX_URL) as response:
@@ -403,15 +500,11 @@ def ingest_export(
         for partition in listing.partitions:
             path = Path(tmp) / partition.file_name
             sha256, size = _download(partition.url, path, opener)
-            stats = read_export_stats(path)
-            records = stats.records
-            if records != partition.records:
-                raise ExportIntegrityError(
-                    f"{partition.file_name}: index lists {partition.records} records, zip holds {records}"
-                )
-            downloads.append((partition, path, sha256, size, records, stats.last_updated))
+            downloads.append((partition, path, sha256, size, read_export_stats(path)))
+        if failed := failures(reconcile_export_counts(listing, [stats for *_, stats in downloads])):
+            raise ExportIntegrityError("; ".join(f"{f.subject}: {f.message}" for f in failed), failed)
 
-        for partition, path, sha256, size, records, last_updated in downloads:
+        for partition, path, sha256, size, stats in downloads:
             key = f"openfda/{source}/export_date={listing.export_date}/{partition.file_name}"
             if store.exists(key):
                 stored_sha = _sha256_file(store.get(key, Path(tmp) / f"stored-{partition.file_name}"))
@@ -423,6 +516,6 @@ def ingest_export(
             else:
                 store.put_once(key, path)
                 status = "stored"
-            results.append(PartitionResult(key, sha256, size, records, status, last_updated))
+            results.append(PartitionResult(key, sha256, size, stats.records, status, stats.last_updated))
 
     return ExportResult(source=source, export_date=listing.export_date, partitions=results)
