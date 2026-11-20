@@ -1,6 +1,6 @@
-# Contributing to Recension
+# Contributing to Filiation
 
-Thanks for helping. This repository is the **public mirror** of Recension. Development happens in a private repository, and this one is generated from it every Monday. That changes how contributions land.
+Thanks for helping. This repository is the **public mirror** of Filiation. Development happens in a private repository, and this one is generated from it every Monday. That changes how contributions land.
 
 ## Issues
 
@@ -16,7 +16,7 @@ Please include the snapshot or export date you saw the problem in, and the recor
 ## Pull requests
 
 1. **Open an issue first**, so the change can be discussed before you write it.
-2. **Sign the contributor license agreement (CLA).** Recension may also be offered under commercial licenses, so an outside contribution can't be applied without one. A PR without a signed CLA stays open but can't be applied. The signing process is linked here once it is set up; until then, ask in your issue.
+2. **Sign the contributor license agreement (CLA).** Filiation may also be offered under commercial licenses, so an outside contribution can't be applied without one. A PR without a signed CLA stays open but can't be applied. The signing process is linked here once it is set up; until then, ask in your issue.
 3. **Open the PR against `main`** and fill in the PR template; a check enforces it.
    - `Closes #N`: your issue's number.
    - `Milestone: None`.
