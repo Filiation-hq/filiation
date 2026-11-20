@@ -22,12 +22,8 @@ from filiation.core.schemas.run_manifest import (
 )
 from filiation.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
 from filiation.core.utils.hashing import compute_sha256
-from filiation.pipeline.crawler.export_diff import (
-    FALLBACK_KEYS,
-    RECORD_KEYS,
-    RecordDiff,
-    diff_export_changes,
-)
+from filiation.pipeline.crawler.export_diff import RecordDiff, diff_export_changes
+from filiation.pipeline.crawler.identity import FALLBACK_KEYS, RECORD_KEYS
 from filiation.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
     ExportResult,
