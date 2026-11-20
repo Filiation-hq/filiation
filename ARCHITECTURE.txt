@@ -5,8 +5,7 @@ filiation/
 ├── ARCHITECTURE.txt              # This map; also the repo-root marker for get_repo_root() (do not rename)
 ├── README.md                     # Overview, quickstart, CLI usage, data contracts
 ├── RESUME.md                     # Append-only quantified results for pitches and resumes
-├── BUILDINPUBLIC.md              # [PRIVATE] Build-in-public campaign plan (Nov 12; launch schedule superseded by reports/)
-├── reports/                      # [PRIVATE] Research reports: launch plan and post timeline, research-engine strategy, overfitting risks (source of docs/bias-register.md)
+├── reports/                      # [PRIVATE] Research reports: research-engine strategy, overfitting risks (source of docs/bias-register.md); marketing plans live in the private filiation-marketing repo
 ├── research_notes/               # [PRIVATE] Source notes behind each report, one folder per report
 ├── Makefile                      # install / install-dev / test / lint / run
 ├── pyproject.toml                # Workspace tool config (ruff / pytest); ships no code (ADR-002)
