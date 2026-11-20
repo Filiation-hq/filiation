@@ -29,6 +29,13 @@ Task map:
 import json
 
 import pytest
+from filiation.core.storage.raw_store import LocalRawStore
+from filiation.pipeline.crawler.openfda_bulk import (
+    ExportIntegrityError,
+    ingest_export,
+    parse_export_listing,
+    read_export_stats,
+)
 from openfda_fakes import (
     PART_URL,
     PARTITION_URL,
@@ -38,13 +45,6 @@ from openfda_fakes import (
     make_export_zip,
     opener_serving,
     records,
-)
-from recension.core.storage.raw_store import LocalRawStore
-from recension.pipeline.crawler.openfda_bulk import (
-    ExportIntegrityError,
-    ingest_export,
-    parse_export_listing,
-    read_export_stats,
 )
 
 

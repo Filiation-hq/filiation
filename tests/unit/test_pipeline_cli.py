@@ -1,9 +1,9 @@
-"""Unit tests for the public recension-pipeline CLI and how it loads the internal commands.
+"""Unit tests for the public filiation-pipeline CLI and how it loads the internal commands.
 
 Task map:
-    Input: the click group in recension.pipeline.cli, and the module that adds internal commands.
+    Input: the click group in filiation.pipeline.cli, and the module that adds internal commands.
     Output: the public commands always load; the internal ones (PDF crawl, extraction, recall
-        report) load only when recension.pipeline.cli_internal is installed, which it is not in
+        report) load only when filiation.pipeline.cli_internal is installed, which it is not in
         the public mirror.
     Edge cases: the internal module is absent (public mirror) -> skipped quietly; a module the
         internal module needs is missing (e.g. pdfplumber without the pdf extra) -> the error
@@ -19,16 +19,16 @@ from pathlib import Path
 
 import click
 import pytest
-from recension.pipeline.cli import INTERNAL_COMMANDS, register_internal_commands
+from filiation.pipeline.cli import INTERNAL_COMMANDS, register_internal_commands
 
-PIPELINE_SRC = Path(__file__).resolve().parents[2] / "packages" / "pipeline" / "src" / "recension" / "pipeline"
+PIPELINE_SRC = Path(__file__).resolve().parents[2] / "packages" / "pipeline" / "src" / "filiation" / "pipeline"
 PUBLIC_IMPORTS = (
-    "recension.core.",
-    "recension.pipeline.cli_common",
-    "recension.pipeline.crawler.openfda_bulk",
-    "recension.pipeline.crawler.export_diff",
-    "recension.pipeline.crawler.ingestion_run",
-    "recension.pipeline.crawler.openfda_client",
+    "filiation.core.",
+    "filiation.pipeline.cli_common",
+    "filiation.pipeline.crawler.openfda_bulk",
+    "filiation.pipeline.crawler.export_diff",
+    "filiation.pipeline.crawler.ingestion_run",
+    "filiation.pipeline.crawler.openfda_client",
 )
 
 
@@ -49,7 +49,7 @@ def importer_raising(name: str):
 
 
 def test_register_internal_commands_skips_quietly_when_the_internal_module_is_absent():
-    # Sample: the public mirror, where recension.pipeline.cli_internal is not shipped. The
+    # Sample: the public mirror, where filiation.pipeline.cli_internal is not shipped. The
     # public commands must still load, so a missing internal module is not an error.
     group = click.Group()
     assert register_internal_commands(group, import_module=importer_raising(INTERNAL_COMMANDS)) is False
@@ -78,10 +78,10 @@ def test_register_internal_commands_adds_what_the_internal_module_registers():
 @pytest.mark.parametrize("module", ["cli.py", "cli_common.py"])
 def test_public_cli_modules_import_only_modules_the_public_mirror_ships(module):
     # Sample: the import statements of cli.py and cli_common.py, parsed with ast. Each
-    # recension.* import must be core or one of the public pipeline modules; anything else
+    # filiation.* import must be core or one of the public pipeline modules; anything else
     # (CDRH crawler, extraction, linkage) would make the public CLI fail to import.
     tree = ast.parse((PIPELINE_SRC / module).read_text(encoding="utf-8"))
     imported = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module]
     imported += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
-    private = [name for name in imported if name.startswith("recension.") and not name.startswith(PUBLIC_IMPORTS)]
+    private = [name for name in imported if name.startswith("filiation.") and not name.startswith(PUBLIC_IMPORTS)]
     assert private == []

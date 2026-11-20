@@ -1,14 +1,14 @@
-"""Unit tests for Recension core schemas."""
+"""Unit tests for Filiation core schemas."""
 
 import unittest
 
-from recension.core.schemas.device_nodes import DeviceNode
-from recension.core.schemas.predicate_edges import (
+from filiation.core.schemas.device_nodes import DeviceNode
+from filiation.core.schemas.predicate_edges import (
     ExtractionMethod,
     PredicateEdge,
     RelationshipType,
 )
-from recension.core.schemas.recalls import RecallRecord
+from filiation.core.schemas.recalls import RecallRecord
 
 
 class TestSchemas(unittest.TestCase):

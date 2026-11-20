@@ -1,4 +1,4 @@
-"""Unit tests for the run manifest contract in recension.core.schemas.run_manifest (ADR-010, #42).
+"""Unit tests for the run manifest contract in filiation.core.schemas.run_manifest (ADR-010, #42).
 
 Task map:
     Input: the fields of one ingestion run: run id and date, timestamps, commit SHA, writer,
@@ -28,7 +28,7 @@ targets_from (#88):
 import json
 
 import pytest
-from recension.core.schemas.run_manifest import (
+from filiation.core.schemas.run_manifest import (
     LatestPointer,
     ManifestObject,
     RunManifest,

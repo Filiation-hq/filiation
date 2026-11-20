@@ -1,4 +1,4 @@
-"""Unit tests for the weekly export diff in recension.pipeline.crawler.export_diff (#40).
+"""Unit tests for the weekly export diff in filiation.pipeline.crawler.export_diff (#40).
 
 Task map:
     Input: one source's previous and current export zips (one or more partitions each) and
@@ -25,16 +25,16 @@ Per-key changes (#76, ADR-018):
 import json
 
 import pytest
-from openfda_fakes import make_export_zip
-from recension.core.schemas import run_manifest as rm
-from recension.pipeline.crawler import export_diff as ed
-from recension.pipeline.crawler.export_diff import (
+from filiation.core.schemas import run_manifest as rm
+from filiation.pipeline.crawler import export_diff as ed
+from filiation.pipeline.crawler.export_diff import (
     FALLBACK_KEYS,
     RECORD_KEYS,
     RecordDiff,
     diff_exports,
 )
-from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError
+from filiation.pipeline.crawler.openfda_bulk import ExportIntegrityError
+from openfda_fakes import make_export_zip
 
 STRYKER = {"k_number": "K210758", "applicant": "Stryker", "decision_date": "2021-04-15", "openfda": {}}
 CATHETER = {"k_number": "K030123", "applicant": "Example Medical", "decision_date": "2003-05-02"}

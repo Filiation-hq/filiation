@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from recension.pipeline.crawler.openfda_client import OpenFDAClient
+from filiation.pipeline.crawler.openfda_client import OpenFDAClient
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "openfda" / "recall_record_Z-0001-04.json"
 

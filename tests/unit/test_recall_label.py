@@ -37,8 +37,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from recension.core.schemas import data_contract
-from recension.core.schemas import recalls as r
+from filiation.core.schemas import data_contract
+from filiation.core.schemas import recalls as r
 
 POSTED = "recall.event_date_posted"
 REPORTED = "enforcement.report_date"

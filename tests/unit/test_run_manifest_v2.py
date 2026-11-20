@@ -22,8 +22,8 @@ ManifestFinding is reached through the module so this file imports on the base b
 import json
 
 import pytest
-from recension.core.schemas import run_manifest as rm
-from recension.core.schemas.run_manifest import ManifestObject, RunManifest, SourceSnapshot
+from filiation.core.schemas import run_manifest as rm
+from filiation.core.schemas.run_manifest import ManifestObject, RunManifest, SourceSnapshot
 
 SHA = "eb479de53bcb8b48c73c9a5ecaf6eea75eb84a00431ac0c04000090005c663c9"
 COMMIT = "f7d257a" + "0" * 33
@@ -208,7 +208,7 @@ def test_manifest_finding_rejects_malformed_fields(override):
 def test_manifest_finding_accepts_what_a_pipeline_finding_serializes():
     # Sample: a pipeline Finding's to_dict for the pre-MDA rule. The two types live in
     # different packages (core can't import pipeline), so their shapes must stay in step.
-    from recension.pipeline.crawler.findings import CheckSpec
+    from filiation.pipeline.crawler.findings import CheckSpec
 
     data = CheckSpec("dates.decision_before_mda", "report", ("R14",)).finding("510k", PRE_MDA["message"]).to_dict()
     assert rm.ManifestFinding(**data).to_dict() == data

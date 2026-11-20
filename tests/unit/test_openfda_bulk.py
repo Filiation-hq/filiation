@@ -1,4 +1,4 @@
-"""Unit tests for the openFDA bulk-export ingester in recension.pipeline.crawler.openfda_bulk (#39).
+"""Unit tests for the openFDA bulk-export ingester in filiation.pipeline.crawler.openfda_bulk (#39).
 
 Task map:
     Input: openFDA's download index (download.json) and the export zip it points to, served
@@ -21,6 +21,17 @@ shares the counter's parser, so the same malformed inputs fail it the same way.
 import hashlib
 
 import pytest
+from filiation.core.storage.raw_store import LocalRawStore
+from filiation.pipeline.crawler.openfda_bulk import (
+    DOWNLOAD_INDEX_URL,
+    ExportConflictError,
+    ExportIntegrityError,
+    count_export_records,
+    ingest_export,
+    iter_export_records,
+    parse_export_listing,
+    read_export_stats,
+)
 from openfda_fakes import (
     ENFORCEMENT_URL,
     FIXTURES,
@@ -30,17 +41,6 @@ from openfda_fakes import (
     load_index,
     make_export_zip,
     opener_for,
-)
-from recension.core.storage.raw_store import LocalRawStore
-from recension.pipeline.crawler.openfda_bulk import (
-    DOWNLOAD_INDEX_URL,
-    ExportConflictError,
-    ExportIntegrityError,
-    count_export_records,
-    ingest_export,
-    iter_export_records,
-    parse_export_listing,
-    read_export_stats,
 )
 
 
@@ -65,7 +65,7 @@ def test_parse_export_listing_reads_export_date_and_partitions_for_enforcement()
 
 
 def test_parse_export_listing_rejects_unknown_source():
-    # Sample: "pma" is a real openFDA device dataset, but not one Recension ingests.
+    # Sample: "pma" is a real openFDA device dataset, but not one Filiation ingests.
     with pytest.raises(ValueError):
         parse_export_listing(load_index(), "pma")
 

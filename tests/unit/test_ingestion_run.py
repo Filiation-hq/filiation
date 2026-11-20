@@ -1,4 +1,4 @@
-"""Unit tests for one ingestion run in recension.pipeline.crawler.ingestion_run (#42).
+"""Unit tests for one ingestion run in filiation.pipeline.crawler.ingestion_run (#42).
 
 Task map:
     Input: the sources to ingest, a RawStore, the run's id suffix, commit SHA, and writer,
@@ -35,6 +35,11 @@ from datetime import datetime, timezone
 
 import pytest
 from click.testing import CliRunner
+from filiation.core.schemas import run_manifest as rm
+from filiation.core.schemas.run_manifest import RunManifest
+from filiation.core.storage.raw_store import LATEST_KEY, KeyExistsError, LocalRawStore
+from filiation.pipeline.crawler.ingestion_run import run_ingestion
+from filiation.pipeline.crawler.openfda_bulk import ExportIntegrityError
 from openfda_fakes import (
     ENFORCEMENT_RECORDS,
     FIXTURES,
@@ -46,11 +51,6 @@ from openfda_fakes import (
     make_export_zip,
     opener_for,
 )
-from recension.core.schemas import run_manifest as rm
-from recension.core.schemas.run_manifest import RunManifest
-from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, LocalRawStore
-from recension.pipeline.crawler.ingestion_run import run_ingestion
-from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError
 
 COMMIT = "f7d257a" + "0" * 33
 MANIFEST_KEY = "runs/2026-11-16_101/manifest.json"
@@ -163,9 +163,9 @@ def test_run_ingestion_refuses_to_reuse_a_run_id(tmp_path):
 
 
 def test_ingest_openfda_cli_writes_manifest_and_prints_it(tmp_path, monkeypatch):
-    # Sample: `recension-pipeline ingest-openfda --source 510k --run-id 101 --commit-sha <sha>
+    # Sample: `filiation-pipeline ingest-openfda --source 510k --run-id 101 --commit-sha <sha>
     # --writer local` with the store and opener patched to fixtures.
-    import recension.pipeline.cli as cli_module
+    import filiation.pipeline.cli as cli_module
 
     store = LocalRawStore(tmp_path)
     monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: store)
@@ -187,7 +187,7 @@ def test_ingest_openfda_cli_includes_the_github_run_attempt_in_the_run_id(tmp_pa
     # Sample: GITHUB_RUN_ID=101 and GITHUB_RUN_ATTEMPT=2, as when "Re-run jobs" repeats a
     # run. GitHub keeps the run id on re-runs, so without the attempt the manifest key
     # would collide with attempt 1's.
-    import recension.pipeline.cli as cli_module
+    import filiation.pipeline.cli as cli_module
 
     store = LocalRawStore(tmp_path)
     monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: store)
@@ -377,9 +377,9 @@ def test_second_run_diffs_an_enforcement_export_with_a_blank_recall_number_inste
 
 
 def test_ingest_openfda_cli_ingests_510k_enforcement_and_recall_by_default(tmp_path, monkeypatch):
-    # Sample: `recension-pipeline ingest-openfda` with no --source, as the weekly workflow
+    # Sample: `filiation-pipeline ingest-openfda` with no --source, as the weekly workflow
     # runs it, against the fixture index (510k, recall, and enforcement entries).
-    import recension.pipeline.cli as cli_module
+    import filiation.pipeline.cli as cli_module
 
     store = LocalRawStore(tmp_path)
     monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: store)
