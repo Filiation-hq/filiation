@@ -1,4 +1,4 @@
-"""Diffs one week's openFDA export against the previous week's, keyed per record (#40, #76)."""
+"""Diffs one week's openFDA export against the previous week's, keyed per record (#40, #76, #91)."""
 
 from __future__ import annotations
 
@@ -60,6 +60,28 @@ def _digest(value: Any) -> bytes:
     return hashlib.blake2b(canonical.encode("utf-8"), digest_size=16).digest()
 
 
+def _cosmetic_form(value: Any) -> Any:
+    """Rewrites a JSON value so that whitespace inside text and the order of list entries no longer matter.
+
+    Args:
+        value: Any JSON-decoded value.
+
+    Returns:
+        Any: The value with each string's whitespace runs collapsed to one space and trimmed,
+            and each list sorted by its entries' canonical JSON, at every depth.
+    """
+    if isinstance(value, str):
+        return " ".join(value.split())
+    if isinstance(value, dict):
+        return {name: _cosmetic_form(item) for name, item in value.items()}
+    if isinstance(value, list):
+        items = [_cosmetic_form(item) for item in value]
+        if all(isinstance(item, str) for item in items):
+            return sorted(items)
+        return sorted(items, key=lambda item: json.dumps(item, sort_keys=True, ensure_ascii=False))
+    return value
+
+
 def _keyed_records(
     key_field: str, paths: list[Path], fallback_field: str | None = None
 ) -> Iterator[tuple[str, dict[str, Any]]]:
@@ -117,8 +139,8 @@ def _record_digests(key_field: str, paths: list[Path], fallback_field: str | Non
 
 def _field_digests(
     key_field: str, paths: list[Path], keys: set[str], fallback_field: str | None
-) -> dict[str, dict[str, bytes]]:
-    """Maps each wanted key to per-field digests of its record.
+) -> dict[str, dict[str, tuple[bytes, bytes]]]:
+    """Maps each wanted key to per-field digests of its record, exact and in cosmetic form.
 
     Args:
         key_field: Field that identifies a record.
@@ -127,10 +149,11 @@ def _field_digests(
         fallback_field: Field that keys a record whose key_field is blank, or None.
 
     Returns:
-        dict[str, dict[str, bytes]]: Field name to value digest, per wanted key.
+        dict[str, dict[str, tuple[bytes, bytes]]]: Field name to (exact digest, cosmetic-form
+            digest), per wanted key.
     """
     return {
-        key: {name: _digest(value) for name, value in record.items()}
+        key: {name: (_digest(value), _digest(_cosmetic_form(value))) for name, value in record.items()}
         for key, record in _keyed_records(key_field, paths, fallback_field)
         if key in keys
     }
@@ -143,7 +166,8 @@ def diff_export_changes(
 
     Records are matched on key_field. A record is amended when its content differs in any
     way other than key order; its changed top-level fields, including fields present on only
-    one side, are listed. Each export is streamed twice: once to digest every record, then
+    one side, are listed, and those that differ only in whitespace or list order are also
+    marked cosmetic (ADR-021). Each export is streamed twice: once to digest every record, then
     again to read field digests for the amended records only.
 
     Args:
@@ -154,7 +178,8 @@ def diff_export_changes(
             None rejects them.
 
     Returns:
-        list[KeyChange]: One change per added, removed, or amended key, in key order.
+        list[KeyChange]: One change per added, removed, or amended key, in key order, with an
+            amendment's cosmetic fields marked.
 
     Raises:
         ExportIntegrityError: If either export has a duplicate key, an unkeyable record, or
@@ -172,7 +197,8 @@ def diff_export_changes(
         for key in amended:
             old, new = old_fields[key], new_fields[key]
             fields = tuple(name for name in old.keys() | new.keys() if old.get(name) != new.get(name))
-            changes.append(KeyChange(key, "amended", fields))
+            cosmetic = tuple(name for name in fields if name in old and name in new and old[name][1] == new[name][1])
+            changes.append(KeyChange(key, "amended", fields, cosmetic))
     return sorted(changes, key=lambda change: change.key)
 
 
