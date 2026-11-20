@@ -14,12 +14,20 @@ Task map:
     Invariants: the same pair of exports always gives the same diff; memory holds one
         digest per key plus field digests for amended records only, never whole exports
         (the real 510(k) export inflates to ~1.6 GB).
+
+Per-key changes (#76, ADR-018):
+    Output: one KeyChange per added, removed, or amended key, with an amended record's changed
+        top-level fields, in key order; the counts are derived from the same list.
+    Edge cases: exports in different record orders; a fallback-keyed enforcement record;
+        identical exports (empty list).
 """
 
 import json
 
 import pytest
 from openfda_fakes import make_export_zip
+from recension.core.schemas import run_manifest as rm
+from recension.pipeline.crawler import export_diff as ed
 from recension.pipeline.crawler.export_diff import (
     FALLBACK_KEYS,
     RECORD_KEYS,
@@ -214,3 +222,51 @@ def test_diff_rejects_two_keyless_records_with_the_same_fallback_value(tmp_path)
     export = write_export(tmp_path / "e.zip", [KEYLESS_ENFORCEMENT, other])
     with pytest.raises(ExportIntegrityError, match="94520"):
         diff_exports("recall_number", [export], [export], fallback_field="event_id")
+
+
+def test_diff_export_changes_lists_each_added_removed_and_amended_key_with_its_changed_fields(tmp_path):
+    # Sample: last week STRYKER, CATHETER, STENT; this week STENT is gone, K251234 is new, and
+    # STRYKER's decision_date and openfda block changed (the real weekly openfda churn).
+    previous = write_export(tmp_path / "prev.zip", [STRYKER, CATHETER, STENT])
+    amended = {**STRYKER, "decision_date": "2021-04-16", "openfda": {"fei_number": ["3005985723"]}}
+    current = write_export(tmp_path / "cur.zip", [amended, CATHETER, {"k_number": "K251234"}])
+
+    assert ed.diff_export_changes("k_number", [previous], [current]) == [
+        rm.KeyChange("K210758", "amended", ("decision_date", "openfda")),
+        rm.KeyChange("K251234", "added"),
+        rm.KeyChange("K882211", "removed"),
+    ]
+
+
+def test_diff_export_changes_come_out_in_key_order_whatever_the_export_order(tmp_path):
+    # Sample: three new records written in reverse key order against an empty previous export.
+    previous = write_export(tmp_path / "prev.zip", [])
+    current = write_export(tmp_path / "cur.zip", [{"k_number": k} for k in ("K3", "K2", "K1")])
+    assert [c.key for c in ed.diff_export_changes("k_number", [previous], [current])] == ["K1", "K2", "K3"]
+
+
+def test_diff_export_changes_key_a_blank_recall_number_by_its_fallback(tmp_path):
+    # Sample: the real enforcement record with a blank recall_number (event 94520), reclassified.
+    # Its change must be listed under the same fallback key the counts use.
+    before = {"recall_number": "", "event_id": "94520", "classification": "Not Yet Classified"}
+    previous = write_export(tmp_path / "prev.zip", [before])
+    current = write_export(tmp_path / "cur.zip", [{**before, "classification": "Class II"}])
+    changes = ed.diff_export_changes("recall_number", [previous], [current], FALLBACK_KEYS["enforcement"])
+    assert changes == [rm.KeyChange("event_id=94520", "amended", ("classification",))]
+
+
+def test_diff_export_changes_of_identical_exports_is_empty(tmp_path):
+    # Sample: the same two records in both weeks; nothing to list, so nothing to store.
+    previous = write_export(tmp_path / "prev.zip", [STRYKER, CATHETER])
+    current = write_export(tmp_path / "cur.zip", [CATHETER, STRYKER])
+    assert ed.diff_export_changes("k_number", [previous], [current]) == []
+
+
+def test_record_diff_counts_come_from_the_change_list():
+    # Sample: one added, two amended (openfda twice, decision_date once), no removals.
+    changes = [
+        rm.KeyChange("K1", "added"),
+        rm.KeyChange("K2", "amended", ("openfda",)),
+        rm.KeyChange("K3", "amended", ("decision_date", "openfda")),
+    ]
+    assert ed.RecordDiff.from_changes(changes) == RecordDiff(1, 0, 2, {"decision_date": 1, "openfda": 2})
