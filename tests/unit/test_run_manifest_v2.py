@@ -11,10 +11,10 @@ Task map:
         whose check did not run; a "fail" finding in a written manifest (a fail stops the run
         before any manifest exists, so one here means a gate was bypassed); a malformed
         finding (bad severity, register id, or check id); a v1 document that carries v2
-        fields; schema_version 3 or missing; a v1 manifest re-serialized (must stay v1, not
+        fields; schema_version 4 or missing; a v1 manifest re-serialized (must stay v1, not
         silently claim checks that never ran); a source with checks but no findings (checked,
         clean) versus none (never checked).
-    Invariants: new manifests are v2; fields_present serializes in path order so the same
+    Invariants: new manifests carry these fields (v3 since ADR-018); fields_present serializes in path order so the same
         run always writes the same JSON; None and empty mean different things.
 ManifestFinding is reached through the module so this file imports on the base branch (#137).
 """
@@ -94,11 +94,6 @@ def v1_document() -> dict:
     return data
 
 
-def test_new_run_manifest_is_written_as_schema_version_2():
-    # Sample: a manifest built today. Readers must be able to tell it carries completeness.
-    assert json.loads(manifest(snapshot()).to_json())["schema_version"] == 2
-
-
 def test_v2_manifest_with_completeness_checks_and_findings_round_trips_through_json():
     # Sample: 3 records, three fields (one always empty), two checks, one pre-MDA finding.
     original = manifest(snapshot())
@@ -129,9 +124,9 @@ def test_v1_document_carrying_v2_fields_is_rejected():
         RunManifest.from_dict(data)
 
 
-@pytest.mark.parametrize("version", [3, None, "2"], ids=["future", "missing", "string"])
+@pytest.mark.parametrize("version", [4, None, "2"], ids=["future", "missing", "string"])
 def test_manifest_with_an_unsupported_schema_version_is_rejected(version):
-    # Sample: schema_version 3 (a newer writer), absent, or the string "2".
+    # Sample: schema_version 4 (a newer writer), absent, or the string "2".
     data = json.loads(manifest(snapshot()).to_json())
     data["schema_version"] = version
     with pytest.raises(ValueError, match="schema_version"):
