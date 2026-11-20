@@ -17,4 +17,4 @@ lint:
 
 # Run the pipeline CLI (use 'make run CMD=status' etc.)
 run:
-	recension-pipeline $(CMD)
+	filiation-pipeline $(CMD)

@@ -7,7 +7,7 @@ import re
 from datetime import date
 from typing import Any
 
-from recension.pipeline.crawler.findings import CheckSpec, Finding, register
+from filiation.pipeline.crawler.findings import CheckSpec, Finding, register
 
 # Medical Device Amendments: no 510(k) clearance can predate it. A receipt can: K760001-K760003
 # were received 1976-05-26, two days before the law took effect.

@@ -11,10 +11,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from recension.core.schemas.device_nodes import DeviceNode
-from recension.core.schemas.recalls import RecallRecord
-from recension.core.utils.paths import get_raw_dir
-from recension.pipeline.crawler.openfda_bulk import USER_AGENT
+from filiation.core.schemas.device_nodes import DeviceNode
+from filiation.core.schemas.recalls import RecallRecord
+from filiation.core.utils.paths import get_raw_dir
+from filiation.pipeline.crawler.openfda_bulk import USER_AGENT
 
 logger = logging.getLogger(__name__)
 

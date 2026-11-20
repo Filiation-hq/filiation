@@ -1,4 +1,4 @@
-"""Run identity, shutdown handling, and shared options for recension-pipeline commands."""
+"""Run identity, shutdown handling, and shared options for filiation-pipeline commands."""
 
 from __future__ import annotations
 

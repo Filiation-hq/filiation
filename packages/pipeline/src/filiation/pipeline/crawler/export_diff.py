@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from recension.core.schemas.run_manifest import KeyChange
-from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
+from filiation.core.schemas.run_manifest import KeyChange
+from filiation.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
 
 # Present on every record and never repeated: 510k/recall verified 2026-11-13 against the openFDA
 # API, enforcement on the full 2026-11-16 export (#129).
