@@ -139,9 +139,10 @@ def test_recall_record_round_trips_through_to_dict_and_from_dict() -> None:
 
 def test_recalls_ddl_keys_on_product_res_number_and_allows_a_null_classification() -> None:
     # Sample: the DuckDB DDL strings for recalls and device_recall_links. Both used to key on
-    # recall_number and declare classification NOT NULL, which real data cannot satisfy.
+    # recall_number and declare classification NOT NULL, which real data cannot satisfy. Links
+    # key on the recall event since ADR-017.
     assert "product_res_number VARCHAR PRIMARY KEY" in CREATE_TABLE_RECALLS
-    assert "PRIMARY KEY (k_number, product_res_number)" in CREATE_TABLE_DEVICE_RECALL_LINKS
+    assert "PRIMARY KEY (pathway, application_number, res_event_number)" in CREATE_TABLE_DEVICE_RECALL_LINKS
     for ddl in (CREATE_TABLE_RECALLS, CREATE_TABLE_DEVICE_RECALL_LINKS):
         assert "recall_number" not in ddl.replace("product_res_number", "")
         assert "classification VARCHAR NOT NULL" not in ddl
