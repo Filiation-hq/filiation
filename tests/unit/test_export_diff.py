@@ -35,12 +35,8 @@ import json
 import pytest
 from filiation.core.schemas import run_manifest as rm
 from filiation.pipeline.crawler import export_diff as ed
-from filiation.pipeline.crawler.export_diff import (
-    FALLBACK_KEYS,
-    RECORD_KEYS,
-    RecordDiff,
-    diff_exports,
-)
+from filiation.pipeline.crawler.export_diff import RecordDiff, diff_exports
+from filiation.pipeline.crawler.identity import FALLBACK_KEYS, RECORD_KEYS
 from filiation.pipeline.crawler.openfda_bulk import ExportIntegrityError
 from openfda_fakes import make_export_zip
 

@@ -11,13 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from filiation.core.schemas.run_manifest import KeyChange
+from filiation.pipeline.crawler.identity import record_key
 from filiation.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
-
-# Present on every record and never repeated: 510k/recall verified 2026-11-13 against the openFDA
-# API, enforcement on the full 2026-11-16 export (#129).
-RECORD_KEYS = {"510k": "k_number", "recall": "product_res_number", "enforcement": "recall_number"}
-# Keys records whose RECORD_KEYS field is blank; the 2026-11-16 enforcement export has one such record.
-FALLBACK_KEYS = {"enforcement": "event_id"}
 
 
 @dataclass(frozen=True)
@@ -97,21 +92,15 @@ def _keyed_records(
         tuple[str, dict[str, Any]]: Each record with its key.
 
     Raises:
-        ExportIntegrityError: If a record is not an object or its key is missing, empty, or
-            not a string.
+        ExportIntegrityError: If a record is not an object, or neither its key nor its
+            fallback is a non-blank string (see record_key).
     """
     for path in paths:
-        for record in iter_export_records(path):
-            key = record.get(key_field) if isinstance(record, dict) else None
-            if key == "" and fallback_field:
-                fallback = record.get(fallback_field)
-                key = f"{fallback_field}={fallback}" if isinstance(fallback, str) and fallback.strip() else None
-                if key is None:
-                    raise ExportIntegrityError(
-                        f"{path.name}: record with a blank {key_field!r} and no usable {fallback_field!r}"
-                    )
-            if not isinstance(key, str) or not key:
-                raise ExportIntegrityError(f"{path.name}: record without a usable {key_field!r}: {key!r}")
+        for row, record in enumerate(iter_export_records(path)):
+            key, _ = record_key(record, key_field, fallback_field)
+            if key is None:
+                usable = f"{key_field!r}" + (f" or {fallback_field!r}" if fallback_field else "")
+                raise ExportIntegrityError(f"{path.name} row {row}: record without a usable {usable}")
             yield key, record
 
 
