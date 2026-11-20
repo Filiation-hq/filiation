@@ -12,6 +12,7 @@ This is the **public mirror** of Filiation. Development happens in a private rep
 | `packages/pipeline/` | openFDA bulk ingestion: downloads the 510(k), recall, and enforcement exports, stores each one write-once, diffs it against the previous snapshot, and records the run in a manifest. Also the `filiation-pipeline` CLI |
 | `packages/models/` | Placeholder for the recall-risk model package |
 | `docs/adrs/` | Architecture decision records: what was decided, and why |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | The stages from raw data to a public score and research platform, and what has to be true before each one ends |
 | `CONTEXT.md` | Domain glossary (510(k), predicate, recall class, availability date, and so on) |
 | `ARCHITECTURE.txt` | Map of the full project. It also lists modules that aren't published here |
 
