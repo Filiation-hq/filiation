@@ -171,11 +171,13 @@ def make_diff(**overrides) -> SourceDiff:
 
 
 def test_run_manifest_round_trips_a_source_diff_through_json():
-    # Sample: the default 510(k) manifest with a diff attached (12 added, 1 removed,
-    # 3 amended). The diff must survive JSON out and back in unchanged.
+    # Sample: the default 510(k) manifest with a counts-only diff attached (12 added, 1 removed,
+    # 3 amended), as schema v2 wrote it before change lists (v3 diffs link one, ADR-018). The
+    # diff must survive JSON out and back in unchanged.
     manifest = make_manifest()
     snapshot = manifest.sources[0]
     with_diff = make_manifest(
+        schema_version=2,
         sources=[SourceSnapshot(snapshot.source, snapshot.status, snapshot.objects, snapshot.export_date,
                                 snapshot.last_updated, diff=make_diff())]
     )

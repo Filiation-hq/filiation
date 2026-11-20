@@ -1,15 +1,16 @@
-"""Diffs one week's openFDA export against the previous week's, keyed per record (#40)."""
+"""Diffs one week's openFDA export against the previous week's, keyed per record (#40, #76)."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from recension.core.schemas.run_manifest import KeyChange
 from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError, iter_export_records
 
 # Present on every record and never repeated: 510k/recall verified 2026-11-13 against the openFDA
@@ -27,6 +28,23 @@ class RecordDiff:
     removed: int
     amended: int
     changed_fields: dict[str, int] = field(default_factory=dict)
+
+    @classmethod
+    def from_changes(cls, changes: Iterable[KeyChange]) -> RecordDiff:
+        """Counts a per-key change list, so the counts and the stored list can never disagree.
+
+        Args:
+            changes: One change per key.
+
+        Returns:
+            RecordDiff: Added, removed, and amended counts, and changed fields in name order.
+        """
+        kinds: Counter[str] = Counter()
+        fields: Counter[str] = Counter()
+        for change in changes:
+            kinds[change.change] += 1
+            fields.update(change.fields)
+        return cls(kinds["added"], kinds["removed"], kinds["amended"], dict(sorted(fields.items())))
 
 
 def _digest(value: Any) -> bytes:
@@ -118,15 +136,15 @@ def _field_digests(
     }
 
 
-def diff_exports(
+def diff_export_changes(
     key_field: str, previous: list[Path], current: list[Path], fallback_field: str | None = None
-) -> RecordDiff:
-    """Compares two exports of one source record by record.
+) -> list[KeyChange]:
+    """Lists, per record key, how two exports of one source differ.
 
     Records are matched on key_field. A record is amended when its content differs in any
-    way other than key order; the top-level fields that differ, including fields present on
-    only one side, are counted. Each export is streamed twice: once to digest every record,
-    then again to read field digests for the amended records only.
+    way other than key order; its changed top-level fields, including fields present on only
+    one side, are listed. Each export is streamed twice: once to digest every record, then
+    again to read field digests for the amended records only.
 
     Args:
         key_field: Field that identifies a record, from RECORD_KEYS.
@@ -136,7 +154,7 @@ def diff_exports(
             None rejects them.
 
     Returns:
-        RecordDiff: Added, removed, and amended counts, and changed fields in name order.
+        list[KeyChange]: One change per added, removed, or amended key, in key order.
 
     Raises:
         ExportIntegrityError: If either export has a duplicate key, an unkeyable record, or
@@ -146,17 +164,34 @@ def diff_exports(
     after = _record_digests(key_field, current, fallback_field)
     amended = {key for key in before.keys() & after.keys() if before[key] != after[key]}
 
-    changed: Counter[str] = Counter()
+    changes = [KeyChange(key, "added") for key in after.keys() - before.keys()]
+    changes += [KeyChange(key, "removed") for key in before.keys() - after.keys()]
     if amended:
         old_fields = _field_digests(key_field, previous, amended, fallback_field)
         new_fields = _field_digests(key_field, current, amended, fallback_field)
         for key in amended:
             old, new = old_fields[key], new_fields[key]
-            changed.update(name for name in old.keys() | new.keys() if old.get(name) != new.get(name))
+            fields = tuple(name for name in old.keys() | new.keys() if old.get(name) != new.get(name))
+            changes.append(KeyChange(key, "amended", fields))
+    return sorted(changes, key=lambda change: change.key)
 
-    return RecordDiff(
-        added=len(after.keys() - before.keys()),
-        removed=len(before.keys() - after.keys()),
-        amended=len(amended),
-        changed_fields=dict(sorted(changed.items())),
-    )
+
+def diff_exports(
+    key_field: str, previous: list[Path], current: list[Path], fallback_field: str | None = None
+) -> RecordDiff:
+    """Counts how two exports of one source differ, from their per-key change list.
+
+    Args:
+        key_field: Field that identifies a record, from RECORD_KEYS.
+        previous: Partition zips of the previous run's export.
+        current: Partition zips of this run's export.
+        fallback_field: Field that keys records whose key_field is blank, or None.
+
+    Returns:
+        RecordDiff: Added, removed, and amended counts, and changed fields in name order.
+
+    Raises:
+        ExportIntegrityError: If either export has a duplicate key, an unkeyable record, or
+            malformed JSON.
+    """
+    return RecordDiff.from_changes(diff_export_changes(key_field, previous, current, fallback_field))

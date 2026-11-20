@@ -1,17 +1,24 @@
-"""Data contract for ingestion run manifests and the latest.json pointer (ADR-010, #42; v2: ADR-016, #92)."""
+"""Data contract for ingestion run manifests, their per-key change lists, and the latest.json pointer (ADR-010, ADR-016, ADR-018)."""
 
 from __future__ import annotations
 
+import gzip
+import io
 import json
 import re
+import zlib
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
-SCHEMA_VERSION = 2
-# v1 manifests predate completeness and checks; they still load, with those fields None.
-SUPPORTED_SCHEMA_VERSIONS = (1, 2)
-V2_SOURCE_FIELDS = ("fields_present", "checks", "findings")
+SCHEMA_VERSION = 3
+# Older manifests still load, with the fields added after them None, and are written back as they were.
+SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3)
+# The schema version that introduced each optional field: v2 completeness (ADR-016), v3 change lists (ADR-018).
+SOURCE_FIELDS_SINCE = {"fields_present": 2, "checks": 2, "findings": 2}
+DIFF_FIELDS_SINCE = {"changes": 3}
+CHANGE_KINDS = ("added", "removed", "amended")
 SEVERITIES = ("fail", "report")
 CHECK_ID = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+")
 REGISTER_ID = re.compile(r"R\d{2}")
@@ -21,6 +28,19 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _RUN_ID = re.compile(r"(\d{4}-\d{2}-\d{2})_[A-Za-z0-9-]+")
 _MANIFEST_KEY = re.compile(r"runs/\d{4}-\d{2}-\d{2}_[A-Za-z0-9-]+/manifest\.json")
+
+
+def changes_key(run_id: str, source: str) -> str:
+    """Returns the store key of one source's per-key change list for a run (ADR-018).
+
+    Args:
+        run_id: The run that wrote the list.
+        source: openFDA source name, e.g. "510k".
+
+    Returns:
+        str: runs/<run_id>/diffs/<source>.jsonl.gz.
+    """
+    return f"runs/{run_id}/diffs/{source}.jsonl.gz"
 
 
 def _check_iso_date(value: str, name: str) -> None:
@@ -72,15 +92,25 @@ class SourceDiff:
     removed: int
     amended: int
     changed_fields: dict[str, int] = field(default_factory=dict)
+    changes: ManifestObject | None = None  # the stored per-key change list, v3+ (ADR-018)
 
     def __post_init__(self) -> None:
-        """Validates the counts and stores changed_fields in field-name order.
+        """Validates the counts and linked change list, and stores changed_fields in field-name order.
 
         Raises:
             ValueError: If a count is negative, amended and changed_fields disagree about
-                whether anything was amended, a field count is outside 1..amended, or
-                previous_export_date is not YYYY-MM-DD.
+                whether anything was amended, a field count is outside 1..amended,
+                previous_export_date is not YYYY-MM-DD, or a linked change list counts other
+                than added + removed + amended records (or is linked when nothing changed).
         """
+        if isinstance(self.changes, dict):
+            object.__setattr__(self, "changes", ManifestObject(**self.changes))
+        if self.changes is not None and self.changes.records != self.added + self.removed + self.amended:
+            raise ValueError(
+                f"change list holds {self.changes.records} records, diff counts {self.added + self.removed + self.amended}"
+            )
+        if self.changes is not None and not self.total:
+            raise ValueError("a diff with no changes links no change list")
         if min(self.added, self.removed, self.amended) < 0:
             raise ValueError(f"diff counts must be >= 0, got {self.added}/{self.removed}/{self.amended}")
         if bool(self.amended) != bool(self.changed_fields):
@@ -90,6 +120,15 @@ class SourceDiff:
         if self.previous_export_date is not None:
             _check_iso_date(self.previous_export_date, "previous_export_date")
         object.__setattr__(self, "changed_fields", dict(sorted(self.changed_fields.items())))
+
+    @property
+    def total(self) -> int:
+        """Counts every changed record.
+
+        Returns:
+            int: added + removed + amended.
+        """
+        return self.added + self.removed + self.amended
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the diff to plain JSON-ready data.
@@ -244,7 +283,8 @@ class RunManifest:
         Raises:
             ValueError: If run_date is not ISO, run_id doesn't start with run_date or isn't
                 key-safe, commit_sha isn't a full 40-character SHA, writer is unknown,
-                schema_version is unsupported, or a v1 manifest carries v2 source fields.
+                schema_version is unsupported, a source carries a field newer than the schema
+                version, or a v3 diff's change list is missing or misplaced.
         """
         _check_iso_date(self.run_date, "run_date")
         match = _RUN_ID.fullmatch(self.run_id)
@@ -256,10 +296,28 @@ class RunManifest:
             raise ValueError(f"writer {self.writer!r} not in {WRITERS}")
         if type(self.schema_version) is not int or self.schema_version not in SUPPORTED_SCHEMA_VERSIONS:
             raise ValueError(f"Unsupported manifest schema_version {self.schema_version!r}")
-        if self.schema_version == 1 and any(
-            getattr(s, name) is not None for s in self.sources for name in V2_SOURCE_FIELDS
-        ):
-            raise ValueError(f"A schema_version 1 manifest cannot carry {V2_SOURCE_FIELDS}")
+        for source in self.sources:
+            if newer := _fields_newer_than(self.schema_version, source, source.diff):
+                raise ValueError(f"A schema_version {self.schema_version} manifest cannot carry {newer}")
+            self._check_change_list(source)
+
+    def _check_change_list(self, source: SourceSnapshot) -> None:
+        """Checks that a v3 source's diff links its change list exactly when it has changes, under this run.
+
+        Args:
+            source: One source of this manifest.
+
+        Raises:
+            ValueError: If a v3 diff with changes links no list, or a list sits outside
+                runs/<run_id>/diffs/<source>.jsonl.gz.
+        """
+        diff = source.diff
+        if diff is None or self.schema_version < DIFF_FIELDS_SINCE["changes"]:
+            return
+        if diff.total and diff.changes is None:
+            raise ValueError(f"{source.source}: a diff with {diff.total} changes must link its change list")
+        if diff.changes is not None and diff.changes.key != changes_key(self.run_id, source.source):
+            raise ValueError(f"{source.source}: change list {diff.changes.key!r} is not this run's diffs/ key")
 
     @property
     def manifest_key(self) -> str:
@@ -273,17 +331,21 @@ class RunManifest:
     def to_dict(self) -> dict[str, Any]:
         """Converts the manifest to plain JSON-ready data, schema_version first.
 
-        A v1 manifest is written back without v2 source fields, so it never claims checks.
+        An older manifest is written back without the fields added after it, so it never claims
+        checks or change lists it could not have had.
 
         Returns:
             dict[str, Any]: Nested dict of the manifest.
         """
         data = asdict(self)
         for source in data["sources"]:
-            if self.schema_version == 1:
-                for name in V2_SOURCE_FIELDS:
+            for name, since in SOURCE_FIELDS_SINCE.items():
+                if self.schema_version < since:
                     source.pop(name)
-            elif source["findings"] is not None:
+            for name, since in DIFF_FIELDS_SINCE.items():
+                if source["diff"] is not None and self.schema_version < since:
+                    source["diff"].pop(name)
+            if source.get("findings") is not None:
                 source["findings"] = [{**f, "register_ids": list(f["register_ids"])} for f in source["findings"]]
         return {"schema_version": data.pop("schema_version"), **data}
 
@@ -311,8 +373,11 @@ class RunManifest:
         version = data.get("schema_version")
         if type(version) is not int or version not in SUPPORTED_SCHEMA_VERSIONS:
             raise ValueError(f"Unsupported manifest schema_version {version!r}")
-        if version == 1 and any(name in s for s in data["sources"] for name in V2_SOURCE_FIELDS):
-            raise ValueError(f"A schema_version 1 manifest cannot carry {V2_SOURCE_FIELDS}")
+        for s in data["sources"]:
+            newer = [n for n, since in SOURCE_FIELDS_SINCE.items() if n in s and version < since]
+            newer += [n for n, since in DIFF_FIELDS_SINCE.items() if n in (s.get("diff") or {}) and version < since]
+            if newer:
+                raise ValueError(f"A schema_version {version} manifest cannot carry {newer}")
         sources = [
             SourceSnapshot(
                 source=s["source"],
@@ -371,3 +436,110 @@ class LatestPointer:
             LatestPointer: The pointer.
         """
         return cls(**data)
+
+
+def _fields_newer_than(version: int, source: SourceSnapshot, diff: SourceDiff | None) -> list[str]:
+    """Lists the fields a source sets that a manifest of the given version could not have held.
+
+    Args:
+        version: The manifest's schema_version.
+        source: One of its sources.
+        diff: That source's diff, if any.
+
+    Returns:
+        list[str]: Names of set fields introduced after version; empty if none.
+    """
+    newer = [n for n, since in SOURCE_FIELDS_SINCE.items() if version < since and getattr(source, n) is not None]
+    if diff is not None:
+        newer += [n for n, since in DIFF_FIELDS_SINCE.items() if version < since and getattr(diff, n) is not None]
+    return newer
+
+
+@dataclass(frozen=True)
+class KeyChange:
+    """How one record key changed between two exports of a source: added, removed, or amended in some fields."""
+
+    key: str
+    change: str
+    fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Rejects a blank key, an unknown change, and fields that disagree with the change.
+
+        Raises:
+            ValueError: If key is blank, change is not in CHANGE_KINDS, an amendment names no
+                field, or an addition or removal names any.
+        """
+        if not isinstance(self.key, str) or not self.key:
+            raise ValueError(f"KeyChange needs a non-blank key, got {self.key!r}")
+        if self.change not in CHANGE_KINDS:
+            raise ValueError(f"change {self.change!r} not in {CHANGE_KINDS}")
+        if (self.change == "amended") != bool(self.fields):
+            raise ValueError(f"{self.key}: only an amended change names fields, got {self.change} {self.fields!r}")
+        object.__setattr__(self, "fields", tuple(sorted(set(self.fields))))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Converts the change to one JSON line's object, omitting fields when there are none.
+
+        Returns:
+            dict[str, Any]: {"key", "change"} plus "fields" for an amendment.
+        """
+        data: dict[str, Any] = {"key": self.key, "change": self.change}
+        if self.fields:
+            data["fields"] = list(self.fields)
+        return data
+
+
+def encode_changes(changes: Iterable[KeyChange]) -> bytes:
+    """Serializes per-key changes as gzip JSON Lines in key order, with bytes that depend only on the changes.
+
+    Args:
+        changes: One change per key, in any order.
+
+    Returns:
+        bytes: Gzip data with no timestamp or file name in its header, so equal changes give equal bytes.
+
+    Raises:
+        ValueError: If a key appears more than once.
+    """
+    ordered = sorted(changes, key=lambda c: c.key)
+    for before, after in zip(ordered, ordered[1:], strict=False):
+        if before.key == after.key:
+            raise ValueError(f"key {after.key!r} appears more than once in the change list")
+    lines = "".join(json.dumps(c.to_dict(), ensure_ascii=False, separators=(",", ":")) + "\n" for c in ordered)
+    buffer = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=buffer, compresslevel=9, mtime=0) as out:
+        out.write(lines.encode("utf-8"))
+    return buffer.getvalue()
+
+
+def decode_changes(data: bytes) -> list[KeyChange]:
+    """Reads a stored change list back, rejecting anything encode_changes could not have written.
+
+    Args:
+        data: Bytes of a runs/<run_id>/diffs/<source>.jsonl.gz object.
+
+    Returns:
+        list[KeyChange]: The changes in key order.
+
+    Raises:
+        ValueError: If the data is not gzip, is truncated, holds a malformed line, or its keys
+            are not strictly increasing.
+    """
+    try:
+        text = gzip.decompress(data).decode("utf-8")
+    except (OSError, EOFError, zlib.error, UnicodeDecodeError) as exc:
+        raise ValueError(f"change list is not complete gzip UTF-8: {exc}") from exc
+    if text and not text.endswith("\n"):
+        raise ValueError("change list ends mid-line")
+    changes = []
+    for number, line in enumerate(text.splitlines(), 1):
+        try:
+            item = json.loads(line)
+            change = KeyChange(item["key"], item["change"], tuple(item.get("fields", ())))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"change list line {number} is malformed: {exc}") from exc
+        if changes and change.key <= changes[-1].key:
+            raise ValueError(f"change list line {number}: key {change.key!r} is out of order or repeated")
+        changes.append(change)
+    return changes

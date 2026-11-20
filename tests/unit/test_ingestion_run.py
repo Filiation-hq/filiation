@@ -21,6 +21,12 @@ Weekly diff (#40):
         longer match its manifest; latest.json naming a manifest that is gone; a diff that
         fails partway.
     Invariants: a run whose diff fails writes no manifest and leaves latest.json in place.
+
+Per-key change lists (#76, ADR-018):
+    Output: runs/<run_id>/diffs/<source>.jsonl.gz, linked from the source's diff with its
+        SHA-256, size, and line count; no list when nothing changed or nothing to compare.
+    Edge cases: an unchanged export; the first run; a rerun with the same run id after a crash
+        left the list behind, with identical or different bytes.
 """
 
 import hashlib
@@ -40,6 +46,7 @@ from openfda_fakes import (
     make_export_zip,
     opener_for,
 )
+from recension.core.schemas import run_manifest as rm
 from recension.core.schemas.run_manifest import RunManifest
 from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, LocalRawStore
 from recension.pipeline.crawler.ingestion_run import run_ingestion
@@ -429,3 +436,80 @@ def test_run_fails_before_downloading_when_latest_json_names_a_missing_manifest(
         run(store, opener=opener)
 
     assert opener.calls == []
+
+
+def amended_week(store):
+    """Runs 101 on the fixture, then returns the opener and records of a week with 1 add, 1 removal, 1 amendment.
+
+    Args:
+        store: RawStore run 101 writes into.
+
+    Returns:
+        FakeOpener: Opener serving the 2026-11-16 export.
+    """
+    run(store)
+    stryker, catheter, _ = fixture_records()
+    new = {"k_number": "K251234", "applicant": "New Co", "product_code": "MRN", "decision_date": "2025-10-01"}
+    return next_week_opener([{**stryker, "decision_date": "2021-04-16"}, catheter, new])
+
+
+def expected_changes() -> list:
+    """Lists the per-key changes of the amended week: K210758 amended, K251234 added, K882211 removed.
+
+    Returns:
+        list[KeyChange]: The changes in key order.
+    """
+    return [
+        rm.KeyChange("K210758", "amended", ("decision_date",)),
+        rm.KeyChange("K251234", "added"),
+        rm.KeyChange("K882211", "removed"),
+    ]
+CHANGES_KEY = "runs/2026-11-23_102/diffs/510k.jsonl.gz"
+
+
+def test_run_writes_the_change_list_under_the_run_and_links_it_with_its_sha256(tmp_path):
+    # Sample: run 101 stores the fixture; run 102 sees K882211 removed, K251234 added and
+    # K210758's decision_date corrected. Run 102 must store those three keys and link them.
+    store = LocalRawStore(tmp_path)
+    manifest = run(store, run_suffix="102", opener=amended_week(store), clock=next_week())
+
+    linked = manifest.sources[0].diff.changes
+    data = (tmp_path / CHANGES_KEY).read_bytes()
+    assert (linked.key, linked.sha256, linked.size_bytes, linked.records) == (
+        CHANGES_KEY, hashlib.sha256(data).hexdigest(), len(data), 3
+    )
+    assert rm.decode_changes(data) == expected_changes()
+
+
+def test_run_stores_no_change_list_when_the_export_is_unchanged_or_there_is_no_previous_run(tmp_path):
+    # Sample: run 101 (first run, nothing to compare) and run 102 on the same export. Neither
+    # changed anything, so neither writes a diffs/ object or links one.
+    store = LocalRawStore(tmp_path)
+    first = run(store)
+    second = run(store, run_suffix="102", clock=next_week())
+    assert first.sources[0].diff is None and second.sources[0].diff.changes is None
+    assert not list(tmp_path.glob("runs/*/diffs/*"))
+
+
+def test_rerun_after_a_crash_reuses_an_identical_change_list_left_at_its_key(tmp_path):
+    # Sample: run 102 crashed after storing its change list but before its manifest; it is
+    # rerun with the same id. The stored list has the same bytes, so the rerun links it.
+    store = LocalRawStore(tmp_path)
+    opener = amended_week(store)
+    store.put_once(CHANGES_KEY, rm.encode_changes(expected_changes()))
+
+    manifest = run(store, run_suffix="102", opener=opener, clock=next_week())
+
+    assert manifest.sources[0].diff.changes.records == 3
+
+
+def test_rerun_refuses_a_different_change_list_already_at_its_key(tmp_path):
+    # Sample: a list with only K251234 already sits at run 102's key. Overwriting a stored
+    # object is never allowed, so the run fails and writes no manifest.
+    store = LocalRawStore(tmp_path)
+    opener = amended_week(store)
+    store.put_once(CHANGES_KEY, rm.encode_changes([rm.KeyChange("K251234", "added")]))
+
+    with pytest.raises(KeyExistsError):
+        run(store, run_suffix="102", opener=opener, clock=next_week())
+    assert not (tmp_path / "runs/2026-11-23_102/manifest.json").exists()

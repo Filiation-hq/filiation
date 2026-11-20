@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from collections.abc import Callable
@@ -16,6 +17,8 @@ from recension.core.schemas.run_manifest import (
     RunManifest,
     SourceDiff,
     SourceSnapshot,
+    changes_key,
+    encode_changes,
 )
 from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
 from recension.core.utils.hashing import compute_sha256
@@ -23,7 +26,7 @@ from recension.pipeline.crawler.export_diff import (
     FALLBACK_KEYS,
     RECORD_KEYS,
     RecordDiff,
-    diff_exports,
+    diff_export_changes,
 )
 from recension.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
@@ -127,34 +130,65 @@ def fetch_verified(store: RawStore, objects: list[ManifestObject], dest_dir: Pat
     return paths
 
 
+def _put_change_list(store: RawStore, key: str, data: bytes, work_dir: Path | None) -> str:
+    """Stores a change list once, or accepts the identical list a crashed run with this id already stored.
+
+    Args:
+        store: Raw store to write into.
+        key: runs/<run_id>/diffs/<source>.jsonl.gz.
+        data: The encoded change list.
+        work_dir: Directory for a temporary download of an existing object.
+
+    Returns:
+        str: Hex SHA-256 of the stored bytes.
+
+    Raises:
+        KeyExistsError: If a different object already sits at key.
+    """
+    sha256 = hashlib.sha256(data).hexdigest()
+    if not store.exists(key):
+        return store.put_once(key, data)
+    with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
+        if compute_sha256(store.get(key, Path(tmp) / "changes.jsonl.gz")) != sha256:
+            raise KeyExistsError(f"{key} already holds a different change list")
+    return sha256
+
+
 def _diff_source(
-    store: RawStore, snapshot: SourceSnapshot, previous: RunManifest | None, work_dir: Path | None
+    store: RawStore, run_id: str, snapshot: SourceSnapshot, previous: RunManifest | None, work_dir: Path | None
 ) -> SourceDiff | None:
-    """Diffs one source's new snapshot against the same source in the previous manifest.
+    """Diffs one source's new snapshot against the same source in the previous manifest and stores its change list.
 
     Args:
         store: Raw store holding both snapshots' objects.
+        run_id: This run's id; the change list goes under runs/<run_id>/diffs/.
         snapshot: This run's snapshot of the source.
         previous: The manifest latest.json named when this run started, if any.
         work_dir: Directory for temporary downloads.
 
     Returns:
-        SourceDiff | None: The diff, or None if the previous run did not ingest this source.
+        SourceDiff | None: The diff, linking its change list when anything changed, or None if
+            the previous run did not ingest this source.
 
     Raises:
         ExportIntegrityError: If a stored object fails its hash check or either export has a
             duplicate or unkeyable record.
+        KeyExistsError: If a different change list already sits at this run's key.
     """
     prior = next((s for s in previous.sources if s.source == snapshot.source), None) if previous else None
     if prior is None:
         return None
-    if sorted(o.sha256 for o in prior.objects) == sorted(o.sha256 for o in snapshot.objects):
-        counts = RecordDiff(added=0, removed=0, amended=0)
-    else:
+    changes = []
+    if sorted(o.sha256 for o in prior.objects) != sorted(o.sha256 for o in snapshot.objects):
         with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
             old = fetch_verified(store, prior.objects, Path(tmp) / "previous")
             new = fetch_verified(store, snapshot.objects, Path(tmp) / "current")
-            counts = diff_exports(RECORD_KEYS[snapshot.source], old, new, FALLBACK_KEYS.get(snapshot.source))
+            changes = diff_export_changes(RECORD_KEYS[snapshot.source], old, new, FALLBACK_KEYS.get(snapshot.source))
+    counts = RecordDiff.from_changes(changes)
+    linked = None
+    if changes:
+        key, data = changes_key(run_id, snapshot.source), encode_changes(changes)
+        linked = ManifestObject(key, _put_change_list(store, key, data, work_dir), len(data), len(changes))
     return SourceDiff(
         previous_run_id=previous.run_id,
         previous_export_date=prior.export_date,
@@ -162,6 +196,7 @@ def _diff_source(
         removed=counts.removed,
         amended=counts.amended,
         changed_fields=counts.changed_fields,
+        changes=linked,
     )
 
 
@@ -197,9 +232,9 @@ def run_ingestion(
         ExportIntegrityError: If any export fails its record-count check, a stored object
             fails its hash check, or a diff finds a duplicate or unkeyable record; no
             manifest is written.
+        KeyExistsError: If a manifest, or a different change list, already exists for this run id.
         FileNotFoundError: If latest.json names a manifest that is missing; nothing is downloaded.
         ExportConflictError: If an export_date was re-published with different bytes.
-        KeyExistsError: If a manifest for this run id already exists.
         ValueError: If the run id, commit, or writer is invalid.
     """
     started = clock()
@@ -219,7 +254,7 @@ def run_ingestion(
     snapshots = []
     for source in sources:
         snapshot = _snapshot(ingest_export(source, store, opener=opener, work_dir=work_dir))
-        snapshots.append(replace(snapshot, diff=_diff_source(store, snapshot, previous, work_dir)))
+        snapshots.append(replace(snapshot, diff=_diff_source(store, skeleton.run_id, snapshot, previous, work_dir)))
     manifest = replace(skeleton, sources=snapshots, finished_at=iso_utc(clock()))
     store.put_once(manifest.manifest_key, manifest.to_json())
     store.write_latest(LatestPointer.for_manifest(manifest).to_json())
