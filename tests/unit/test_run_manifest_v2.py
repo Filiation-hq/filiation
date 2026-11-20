@@ -124,9 +124,9 @@ def test_v1_document_carrying_v2_fields_is_rejected():
         RunManifest.from_dict(data)
 
 
-@pytest.mark.parametrize("version", [4, None, "2"], ids=["future", "missing", "string"])
+@pytest.mark.parametrize("version", [5, None, "2"], ids=["future", "missing", "string"])
 def test_manifest_with_an_unsupported_schema_version_is_rejected(version):
-    # Sample: schema_version 4 (a newer writer), absent, or the string "2".
+    # Sample: schema_version 5 (a newer writer than v4, ADR-021), absent, or the string "2".
     data = json.loads(manifest(snapshot()).to_json())
     data["schema_version"] = version
     with pytest.raises(ValueError, match="schema_version"):

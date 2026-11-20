@@ -49,7 +49,7 @@ filiation/
 │   │
 │   ├── pipeline/                 # filiation-pipeline: Data Engineering (Tesseract OCR, pdfplumber via the [pdf] extra (ADR-014); LLM fallback reserved, ADR-006)
 │   │   ├── src/filiation/pipeline/
-│   │   │   ├── crawler/          # openFDA bulk-export ingester with zero-tolerance count reconciliation (ADR-015), ingestion check findings tied to bias-register factors, per-run field completeness and 510(k) date rules (ADR-016), weekly export diff with per-key change lists (ADR-018), ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
+│   │   │   ├── crawler/          # openFDA bulk-export ingester with zero-tolerance count reconciliation (ADR-015), ingestion check findings tied to bias-register factors, per-run field completeness and 510(k) date rules (ADR-016), weekly export diff with per-key change lists that mark cosmetic changes (ADR-018, ADR-021), amendment and removal report (#91), ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (one link per recall event, ADR-017), recall class join from enforcement, recall date resolution (ADR-013), weekly recall report (MAUDE planned)
@@ -82,4 +82,4 @@ filiation/
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
     ├── PUBLIC_MIRROR.md          # Runbook: public mirror setup, publishing, allowlist changes, outside PRs
     ├── bias-register.md          # Overfitting, leakage, and bias factors R01–R46: stage gate, owner, control, issue
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-020)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-021)

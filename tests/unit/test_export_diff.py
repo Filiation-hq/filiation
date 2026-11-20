@@ -20,6 +20,14 @@ Per-key changes (#76, ADR-018):
         top-level fields, in key order; the counts are derived from the same list.
     Edge cases: exports in different record orders; a fallback-keyed enforcement record;
         identical exports (empty list).
+
+Cosmetic changes (#91, ADR-021):
+    Output: each amended change also names the fields whose change is cosmetic only: text that
+        differs only in whitespace, or lists whose entries are only reordered, at any depth.
+    Edge cases: a whitespace run inside text, or leading/trailing whitespace (cosmetic); a
+        reordered top-level list or one nested in openfda (cosmetic); a list that gained,
+        lost or duplicated an entry, a case change, a value blanked to "n/a", a field that
+        appears or disappears (all substantive); a record with both kinds of change.
 """
 
 import json
@@ -270,3 +278,87 @@ def test_record_diff_counts_come_from_the_change_list():
         rm.KeyChange("K3", "amended", ("decision_date", "openfda")),
     ]
     assert ed.RecordDiff.from_changes(changes) == RecordDiff(1, 0, 2, {"decision_date": 1, "openfda": 2})
+
+
+RECALL = {
+    "product_res_number": "Z-0636-2013",
+    "product_description": "Siemens CLINITEK Atlas Positive and Negative Control Strips",
+    "action": "Siemens sent an Urgent Field Safety Notice.",
+    "k_numbers": ["K003154", "K962155"],
+    "openfda": {"fei_number": ["3002806549", "1000119087"], "device_name": "Strips"},
+}
+
+
+def recall_change(tmp_path, **changes):
+    """Diffs RECALL against a copy of itself with the given fields replaced.
+
+    Args:
+        tmp_path: Directory for the two export zips.
+        **changes: Field values for the current export.
+
+    Returns:
+        KeyChange: The one change the diff lists.
+    """
+    previous = write_export(tmp_path / "prev.zip", [RECALL])
+    current = write_export(tmp_path / "cur.zip", [{**RECALL, **changes}])
+    (change,) = ed.diff_export_changes("product_res_number", [previous], [current])
+    return change
+
+
+def test_diff_marks_a_whitespace_run_inside_text_as_cosmetic(tmp_path):
+    # Sample: the real Nov 13 -> 18 recall churn, where 3,170 text fields changed only in runs
+    # of whitespace (here a double space and a non-breaking space).
+    change = recall_change(tmp_path, product_description="Siemens CLINITEK  Atlas Positive and\u00a0Negative Control Strips")
+    assert change == rm.KeyChange("Z-0636-2013", "amended", ("product_description",), cosmetic=("product_description",))
+
+
+def test_diff_marks_leading_or_trailing_whitespace_as_cosmetic(tmp_path):
+    # Sample: the action text with a trailing space and newline added.
+    change = recall_change(tmp_path, action="Siemens sent an Urgent Field Safety Notice. \n")
+    assert change.cosmetic == ("action",)
+
+
+def test_diff_marks_a_reordered_list_as_cosmetic(tmp_path):
+    # Sample: the same two K-numbers in the other order, as in all 54 real k_numbers changes.
+    change = recall_change(tmp_path, k_numbers=["K962155", "K003154"])
+    assert change.cosmetic == ("k_numbers",)
+
+
+def test_diff_marks_a_list_reordered_inside_openfda_as_cosmetic(tmp_path):
+    # Sample: openfda.fei_number reordered, about half of the real weekly 510(k) openfda churn.
+    change = recall_change(tmp_path, openfda={"fei_number": ["1000119087", "3002806549"], "device_name": "Strips"})
+    assert change.cosmetic == ("openfda",)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("k_numbers", ["K003154", "K962155", "K991234"]),
+        ("k_numbers", ["K003154"]),
+        ("k_numbers", ["K003154", "K003154", "K962155"]),
+        ("openfda", {"fei_number": ["3002806549"], "device_name": "Strips"}),
+        ("product_description", "SIEMENS CLINITEK Atlas Positive and Negative Control Strips"),
+        ("product_description", "n/a"),
+    ],
+    ids=["list gained an entry", "list lost an entry", "list duplicated an entry", "openfda list lost an entry", "case change", "blanked to n/a"],
+)
+def test_diff_treats_a_change_in_content_as_substantive(tmp_path, field, value):
+    # Sample: one real change of content per case; the last is the real Z-0774-03 recall,
+    # whose description openFDA replaced with "n/a". None of these is cosmetic.
+    change = recall_change(tmp_path, **{field: value})
+    assert change.fields == (field,)
+    assert change.cosmetic == ()
+
+
+def test_diff_treats_a_field_that_appears_or_disappears_as_substantive(tmp_path):
+    # Sample: the recall gains pma_numbers and loses action in the same week.
+    previous = write_export(tmp_path / "prev.zip", [RECALL])
+    current = {k: v for k, v in RECALL.items() if k != "action"} | {"pma_numbers": ["P990025"]}
+    (change,) = ed.diff_export_changes("product_res_number", [previous], [write_export(tmp_path / "cur.zip", [current])])
+    assert change == rm.KeyChange("Z-0636-2013", "amended", ("action", "pma_numbers"))
+
+
+def test_diff_separates_cosmetic_from_substantive_fields_in_one_record(tmp_path):
+    # Sample: whitespace-only action change plus a real new K-number in the same week.
+    change = recall_change(tmp_path, action="Siemens  sent an Urgent Field Safety Notice.", k_numbers=["K003154", "K962155", "K991234"])
+    assert change == rm.KeyChange("Z-0636-2013", "amended", ("action", "k_numbers"), cosmetic=("action",))

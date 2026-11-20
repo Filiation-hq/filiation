@@ -1,4 +1,4 @@
-"""Data contract for ingestion run manifests, their per-key change lists, and the latest.json pointer (ADR-010, ADR-016, ADR-018)."""
+"""Data contract for ingestion run manifests, their per-key change lists, and the latest.json pointer (ADR-010, ADR-016, ADR-018, ADR-021)."""
 
 from __future__ import annotations
 
@@ -12,12 +12,14 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 # Older manifests still load, with the fields added after them None, and are written back as they were.
-SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3)
+SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3, 4)
 # The schema version that introduced each optional field: v2 completeness (ADR-016), v3 change lists (ADR-018).
 SOURCE_FIELDS_SINCE = {"fields_present": 2, "checks": 2, "findings": 2}
 DIFF_FIELDS_SINCE = {"changes": 3}
+# From v4 a change list marks fields whose change is cosmetic only (ADR-021); a v3 list never classified them.
+COSMETIC_SINCE = 4
 CHANGE_KINDS = ("added", "removed", "amended")
 SEVERITIES = ("fail", "report")
 CHECK_ID = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+")
@@ -462,13 +464,15 @@ class KeyChange:
     key: str
     change: str
     fields: tuple[str, ...] = ()
+    # The subset of fields whose change is only whitespace in text or the order of list entries (ADR-021).
+    cosmetic: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        """Rejects a blank key, an unknown change, and fields that disagree with the change.
+        """Rejects a blank key, an unknown change, and fields or cosmetic fields that disagree with the change.
 
         Raises:
             ValueError: If key is blank, change is not in CHANGE_KINDS, an amendment names no
-                field, or an addition or removal names any.
+                field, an addition or removal names any, or a cosmetic field is not a changed field.
         """
         if not isinstance(self.key, str) or not self.key:
             raise ValueError(f"KeyChange needs a non-blank key, got {self.key!r}")
@@ -477,16 +481,30 @@ class KeyChange:
         if (self.change == "amended") != bool(self.fields):
             raise ValueError(f"{self.key}: only an amended change names fields, got {self.change} {self.fields!r}")
         object.__setattr__(self, "fields", tuple(sorted(set(self.fields))))
+        object.__setattr__(self, "cosmetic", tuple(sorted(set(self.cosmetic))))
+        if stray := set(self.cosmetic) - set(self.fields):
+            raise ValueError(f"{self.key}: cosmetic fields {sorted(stray)} are not among its changed fields {list(self.fields)}")
+
+    @property
+    def substantive_fields(self) -> tuple[str, ...]:
+        """Returns the changed fields whose change is more than cosmetic.
+
+        Returns:
+            tuple[str, ...]: fields minus cosmetic, in name order.
+        """
+        return tuple(name for name in self.fields if name not in self.cosmetic)
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the change to one JSON line's object, omitting fields when there are none.
 
         Returns:
-            dict[str, Any]: {"key", "change"} plus "fields" for an amendment.
+            dict[str, Any]: {"key", "change"}, plus "fields" for an amendment and "cosmetic" when some are.
         """
         data: dict[str, Any] = {"key": self.key, "change": self.change}
         if self.fields:
             data["fields"] = list(self.fields)
+        if self.cosmetic:
+            data["cosmetic"] = list(self.cosmetic)
         return data
 
 
@@ -536,7 +554,7 @@ def decode_changes(data: bytes) -> list[KeyChange]:
     for number, line in enumerate(text.splitlines(), 1):
         try:
             item = json.loads(line)
-            change = KeyChange(item["key"], item["change"], tuple(item.get("fields", ())))
+            change = KeyChange(item["key"], item["change"], tuple(item.get("fields", ())), tuple(item.get("cosmetic", ())))
         except (ValueError, KeyError, TypeError) as exc:
             raise ValueError(f"change list line {number} is malformed: {exc}") from exc
         if changes and change.key <= changes[-1].key:

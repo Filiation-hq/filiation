@@ -12,8 +12,8 @@ Task map:
         list that is out of order, truncated, or not gzip; an empty list; a diff whose linked
         list counts a different number of records than the diff; a list stored outside the
         run's own diffs/ key; a v3 diff with changes but no list, or no changes but a list;
-        a v2 document carrying a list; a v2 manifest written back; schema_version 4.
-    Invariants: new manifests are v3; the same changes always encode to the same bytes, so a
+        a v2 document carrying a list; a v2 manifest written back; schema_version 5.
+    Invariants: new manifests are v3 or later; the same changes always encode to the same bytes, so a
         rerun on the same pair of exports writes an identical object.
 New names are reached through the module so this file imports on the base branch (#137).
 """
@@ -168,9 +168,12 @@ def test_decode_changes_rejects_a_list_out_of_order_truncated_or_not_gzip(data):
         rm.decode_changes(data)
 
 
-def test_new_run_manifest_is_written_as_schema_version_3():
-    # Sample: a manifest built today. Readers must be able to tell its diffs link change lists.
-    assert json.loads(manifest(diff()).to_json())["schema_version"] == 3
+def test_new_run_manifest_is_written_at_a_version_whose_diffs_link_change_lists():
+    # Sample: a manifest built today. Readers must be able to tell its diffs link change lists,
+    # which every version from v3 does; v4 (ADR-021) also marks cosmetic fields.
+    version = json.loads(manifest(diff()).to_json())["schema_version"]
+    assert version == rm.SCHEMA_VERSION
+    assert version >= rm.DIFF_FIELDS_SINCE["changes"]
 
 
 def test_v3_manifest_with_a_linked_change_list_round_trips_through_json():

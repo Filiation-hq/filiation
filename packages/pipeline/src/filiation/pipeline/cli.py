@@ -25,6 +25,8 @@ from filiation.pipeline.cli_common import (
     run_identity,
     writer_option,
 )
+from filiation.pipeline.crawler.amendment_report import amendment_report as build_amendment_report
+from filiation.pipeline.crawler.amendment_report import report_markdown
 from filiation.pipeline.crawler.ingestion_run import run_ingestion
 from filiation.pipeline.crawler.openfda_bulk import SOURCES, default_opener
 from filiation.pipeline.crawler.openfda_client import OpenFDAClient
@@ -125,6 +127,17 @@ def export_derived(edges: str | None, dest: str | None) -> None:
         logger.info("Exported %d edges to %s and %s", len(df_edges), parquet_path, csv_path)
     except Exception as e:
         logger.info("Exported %d edges to %s (parquet export skipped: %s)", len(df_edges), csv_path, e)
+
+
+@cli.command("amendment-report")
+@click.option("--format", "fmt", type=click.Choice(["json", "markdown"]), default="json", show_default=True)
+def amendment_report(fmt: str) -> None:
+    """Prints how often openFDA amended and removed records across the stored runs (#91, ADR-021)."""
+    report = build_amendment_report(raw_store_from_env())
+    if fmt == "markdown":
+        click.echo(report_markdown(report), nl=False)
+    else:
+        click.echo(json.dumps(report.to_dict(), indent=2))
 
 
 @cli.command("status")
