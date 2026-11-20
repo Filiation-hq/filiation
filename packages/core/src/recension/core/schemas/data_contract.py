@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS recalls (
     res_event_number VARCHAR NOT NULL,
     classification VARCHAR,
     k_numbers VARCHAR[],
+    pma_numbers VARCHAR[],
     product_description VARCHAR,
     root_cause_description VARCHAR,
     reason_for_recall VARCHAR,
@@ -53,12 +54,16 @@ CREATE TABLE IF NOT EXISTS recalls (
 
 CREATE_TABLE_DEVICE_RECALL_LINKS = """
 CREATE TABLE IF NOT EXISTS device_recall_links (
-    k_number VARCHAR NOT NULL,
-    product_res_number VARCHAR NOT NULL,
+    pathway VARCHAR NOT NULL,
+    application_number VARCHAR NOT NULL,
     res_event_number VARCHAR NOT NULL,
+    product_res_numbers VARCHAR[] NOT NULL,
     classification VARCHAR,
+    availability_date DATE,
+    availability_source VARCHAR,
     event_date_initiated DATE,
     is_design_related BOOLEAN,
-    PRIMARY KEY (k_number, product_res_number)
+    date_flags VARCHAR[],
+    PRIMARY KEY (pathway, application_number, res_event_number)
 );
 """
