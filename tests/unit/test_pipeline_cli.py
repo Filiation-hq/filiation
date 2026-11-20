@@ -11,6 +11,9 @@ Task map:
         outside the public modules -> caught here before it breaks the mirror.
     Invariant: the public CLI never imports a module the public mirror does not ship.
 
+amendment-report (#91): prints the amendment and removal report for the configured store, as
+JSON by default or Markdown for the job summary; an empty store still prints a valid report.
+
 Tests for the internal commands live in test_cli_internal.py.
 """
 
@@ -29,6 +32,7 @@ PUBLIC_IMPORTS = (
     "filiation.pipeline.crawler.export_diff",
     "filiation.pipeline.crawler.ingestion_run",
     "filiation.pipeline.crawler.openfda_client",
+    "filiation.pipeline.crawler.amendment_report",
 )
 
 
@@ -85,3 +89,38 @@ def test_public_cli_modules_import_only_modules_the_public_mirror_ships(module):
     imported += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
     private = [name for name in imported if name.startswith("filiation.") and not name.startswith(PUBLIC_IMPORTS)]
     assert private == []
+
+
+def run_amendment_report(tmp_path, monkeypatch, *args):
+    """Runs `filiation-pipeline amendment-report` against an empty local store.
+
+    Args:
+        tmp_path: Directory for the store.
+        monkeypatch: Replaces the store the command opens.
+        *args: Extra command-line arguments.
+
+    Returns:
+        click.testing.Result: The command's result.
+    """
+    from click.testing import CliRunner
+    from filiation.core.storage.raw_store import LocalRawStore
+    from filiation.pipeline import cli as cli_module
+
+    monkeypatch.setattr(cli_module, "raw_store_from_env", lambda: LocalRawStore(tmp_path / "store"))
+    return CliRunner().invoke(cli_module.cli, ["amendment-report", *args])
+
+
+def test_amendment_report_command_prints_json_by_default(tmp_path, monkeypatch):
+    # Sample: a store no run has written to. The JSON report is still valid, with nothing in it.
+    import json
+
+    result = run_amendment_report(tmp_path, monkeypatch)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"since": {}, "rows": [], "removals": []}
+
+
+def test_amendment_report_command_prints_markdown_for_the_job_summary(tmp_path, monkeypatch):
+    # Sample: the same empty store, rendered the way the weekly workflow writes it.
+    result = run_amendment_report(tmp_path, monkeypatch, "--format", "markdown")
+    assert result.exit_code == 0, result.output
+    assert result.output.startswith("## openFDA amendments and removals")
