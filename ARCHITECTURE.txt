@@ -41,7 +41,7 @@ recension/
 ├── packages/                     # One installable package per ownership boundary (ADR-002)
 │   ├── core/                     # recension-core: shared data contracts and utilities
 │   │   ├── src/recension/core/
-│   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls, run_manifest; DuckDB DDL strings
+│   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls (incl. the recall label, ADR-017), run_manifest; DuckDB DDL strings
 │   │   │   ├── storage/          # raw_store.py: write-once RawStore, local (data/raw/) and R2 backends (ADR-010)
 │   │   │   ├── utils/            # hashing.py, paths.py (repo-root & data-tier resolution)
 │   │   │   └── data_loader.py    # Loads derived Parquet; `recension-data` entrypoint
@@ -52,7 +52,7 @@ recension/
 │   │   │   ├── crawler/          # openFDA bulk-export ingester with zero-tolerance count reconciliation (ADR-015), ingestion check findings tied to bias-register factors, per-run field completeness and 510(k) date rules (ADR-016), weekly export diff, ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
-│   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage, recall class join from enforcement, recall date resolution (ADR-013), weekly recall report (MAUDE planned)
+│   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (one link per recall event, ADR-017), recall class join from enforcement, recall date resolution (ADR-013), weekly recall report (MAUDE planned)
 │   │   │   ├── cli.py            # `recension-pipeline` public commands: ingest-openfda | fetch-openfda | export-derived | status; adds cli_internal's commands when installed
 │   │   │   ├── cli_common.py     # Run identity, SIGTERM handling, and options shared by both command modules
 │   │   │   └── cli_internal.py   # Internal commands, not in the public mirror: recall-report | sample-pilot | crawl-pdfs | extract
@@ -82,4 +82,4 @@ recension/
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
     ├── PUBLIC_MIRROR.md          # Runbook: public mirror setup, publishing, allowlist changes, outside PRs
     ├── bias-register.md          # Overfitting, leakage, and bias factors R01–R46: stage gate, owner, control, issue
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-016)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-017)
