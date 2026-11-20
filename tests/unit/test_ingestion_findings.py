@@ -22,18 +22,18 @@ import importlib
 import json
 
 import pytest
+from filiation.core.storage.raw_store import LocalRawStore
+from filiation.pipeline.crawler.openfda_bulk import ExportIntegrityError, ingest_export
 from openfda_fakes import PART_URL, PARTITION_URL, export_body, opener_serving, records
-from recension.core.storage.raw_store import LocalRawStore
-from recension.pipeline.crawler.openfda_bulk import ExportIntegrityError, ingest_export
 
 
 def findings():
     """Imports the findings module.
 
     Returns:
-        module: recension.pipeline.crawler.findings.
+        module: filiation.pipeline.crawler.findings.
     """
-    return importlib.import_module("recension.pipeline.crawler.findings")
+    return importlib.import_module("filiation.pipeline.crawler.findings")
 
 
 @pytest.mark.parametrize("bad", ["R1", "r18", "R018", "18", ""], ids=["one-digit", "lowercase", "three-digit", "no-prefix", "empty"])

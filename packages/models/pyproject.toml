@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "recension-models"
+name = "filiation-models"
 version = "0.1.0"
-description = "Survival analysis, features, and backtesting for the Recension recall-risk score"
+description = "Survival analysis, features, and backtesting for the Filiation recall-risk score"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-only"}
 authors = [
@@ -15,4 +15,4 @@ dependencies = []
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["recension*"]
+include = ["filiation*"]

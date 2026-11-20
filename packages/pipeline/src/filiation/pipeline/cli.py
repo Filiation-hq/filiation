@@ -1,7 +1,7 @@
-"""Unified CLI for the Recension data engineering pipeline.
+"""Unified CLI for the Filiation data engineering pipeline.
 
 The public commands live here. Internal commands (PDF crawl, extraction, recall report) are added
-from recension.pipeline.cli_internal when it is installed; the public mirror does not ship it.
+from filiation.pipeline.cli_internal when it is installed; the public mirror does not ship it.
 """
 
 from __future__ import annotations
@@ -15,28 +15,28 @@ from types import ModuleType
 
 import click
 import pandas as pd
-from recension.core.data_loader import RecensionDataLoader
-from recension.core.storage.raw_store import raw_store_from_env
-from recension.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
-from recension.pipeline.cli_common import (
+from filiation.core.data_loader import FiliationDataLoader
+from filiation.core.storage.raw_store import raw_store_from_env
+from filiation.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
+from filiation.pipeline.cli_common import (
     commit_option,
     run_attempt_option,
     run_id_option,
     run_identity,
     writer_option,
 )
-from recension.pipeline.crawler.ingestion_run import run_ingestion
-from recension.pipeline.crawler.openfda_bulk import SOURCES, default_opener
-from recension.pipeline.crawler.openfda_client import OpenFDAClient
+from filiation.pipeline.crawler.ingestion_run import run_ingestion
+from filiation.pipeline.crawler.openfda_bulk import SOURCES, default_opener
+from filiation.pipeline.crawler.openfda_client import OpenFDAClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("recension.pipeline")
-INTERNAL_COMMANDS = "recension.pipeline.cli_internal"
+logger = logging.getLogger("filiation.pipeline")
+INTERNAL_COMMANDS = "filiation.pipeline.cli_internal"
 
 
 @click.group()
 def cli() -> None:
-    """Recension Pipeline: Data Engineering for FDA 510(k) Lineage Graph."""
+    """Filiation Pipeline: Data Engineering for FDA 510(k) Lineage Graph."""
     pass
 
 
@@ -130,9 +130,9 @@ def export_derived(edges: str | None, dest: str | None) -> None:
 @cli.command("status")
 def status() -> None:
     """Displays local data store health and file counts."""
-    loader = RecensionDataLoader()
+    loader = FiliationDataLoader()
     summary = loader.summary()
-    click.echo("=== Recension Data Engineering Status ===")
+    click.echo("=== Filiation Data Engineering Status ===")
     click.echo(json.dumps(summary, indent=2))
 
 

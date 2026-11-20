@@ -76,4 +76,4 @@ def test_citation_points_readers_at_the_public_repository():
     # Sample: CITATION.cff's repository-code. The source repo is private, so a citation
     # naming it sends every reader to a 404; it must name the public mirror (docs/PUBLIC_MIRROR.md).
     text = (REPO_ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert 'repository-code: "https://github.com/recension-hq/recension"' in text
+    assert 'repository-code: "https://github.com/filiation-hq/filiation"' in text

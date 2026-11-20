@@ -29,11 +29,11 @@ import json
 from pathlib import Path
 
 import pytest
-from recension.core.schemas.data_contract import (
+from filiation.core.schemas.data_contract import (
     CREATE_TABLE_DEVICE_RECALL_LINKS,
     CREATE_TABLE_RECALLS,
 )
-from recension.core.schemas.recalls import AVAILABILITY_SOURCES, DATE_FLAGS, RecallRecord
+from filiation.core.schemas.recalls import AVAILABILITY_SOURCES, DATE_FLAGS, RecallRecord
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "openfda" / "recall_record_Z-0001-04.json"
 

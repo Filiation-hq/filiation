@@ -1,7 +1,7 @@
 {
-  "title": "Recension: the FDA 510(k) predicate lineage graph (software)",
+  "title": "Filiation: the FDA 510(k) predicate lineage graph (software)",
   "upload_type": "software",
-  "description": "Pipeline that builds Recension, a versioned graph of FDA 510(k) predicate relationships extracted from 510(k) summary documents, linked to FDA recall records, with every link traced to its source page. The dataset snapshots are published as a separate Zenodo record under CC BY-NC 4.0.",
+  "description": "Pipeline that builds Filiation, a versioned graph of FDA 510(k) predicate relationships extracted from 510(k) summary documents, linked to FDA recall records, with every link traced to its source page. The dataset snapshots are published as a separate Zenodo record under CC BY-NC 4.0.",
   "creators": [
     {
       "name": "Rocca, Steven"

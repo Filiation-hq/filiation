@@ -22,8 +22,8 @@ import gzip
 import json
 
 import pytest
-from recension.core.schemas import run_manifest as rm
-from recension.core.schemas.run_manifest import (
+from filiation.core.schemas import run_manifest as rm
+from filiation.core.schemas.run_manifest import (
     ManifestObject,
     RunManifest,
     SourceDiff,

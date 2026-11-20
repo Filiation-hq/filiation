@@ -29,9 +29,9 @@ import importlib
 import json
 
 import pytest
+from filiation.core.storage.raw_store import LocalRawStore
+from filiation.pipeline.crawler.openfda_bulk import ingest_export
 from openfda_fakes import export_body, make_export_zip, opener_for
-from recension.core.storage.raw_store import LocalRawStore
-from recension.pipeline.crawler.openfda_bulk import ingest_export
 
 
 def profile_of(records: list, source: str = "510k", export_date: str = "2026-11-09"):
@@ -45,7 +45,7 @@ def profile_of(records: list, source: str = "510k", export_date: str = "2026-11-
     Returns:
         ExportProfile: The profile after observing every record.
     """
-    module = importlib.import_module("recension.pipeline.crawler.completeness")
+    module = importlib.import_module("filiation.pipeline.crawler.completeness")
     profile = module.ExportProfile(source, export_date)
     for record in records:
         profile.observe(record)
@@ -132,7 +132,7 @@ def test_record_that_is_not_an_object_is_reported_and_not_profiled():
 
 def test_field_paths_beyond_the_cap_are_dropped_and_reported():
     # Sample: one record with MAX_FIELDS + 3 distinct keys, as an id-keyed object would have.
-    module = importlib.import_module("recension.pipeline.crawler.completeness")
+    module = importlib.import_module("filiation.pipeline.crawler.completeness")
     record = {f"f{i}": "x" for i in range(module.MAX_FIELDS + 3)}
     profile = profile_of([record])
     assert len(profile.fields_present) == module.MAX_FIELDS
@@ -259,8 +259,8 @@ def test_run_ingestion_writes_completeness_into_the_manifest(tmp_path):
     # carries fields_present, the checks that ran, and its findings list.
     from datetime import datetime, timezone
 
-    from recension.core.schemas.run_manifest import RunManifest
-    from recension.pipeline.crawler.ingestion_run import run_ingestion
+    from filiation.core.schemas.run_manifest import RunManifest
+    from filiation.pipeline.crawler.ingestion_run import run_ingestion
 
     zip_bytes = make_export_zip({"device-510k-0001-of-0001.json": export_body([k("K000001"), k("K000002"), k("K000003")])})
     manifest = run_ingestion(

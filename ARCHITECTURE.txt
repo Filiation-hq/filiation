@@ -1,4 +1,4 @@
-recension/
+filiation/
 ├── AGENTS.md                     # Operating rules for every agent (read first)
 ├── CLAUDE.md / GEMINI.md         # One-line pointers to AGENTS.md for Claude Code / Gemini CLI
 ├── CONTEXT.md                    # Domain glossary (510(k) terms, recall classes, review panels)
@@ -27,44 +27,44 @@ recension/
 │   │   └── tdd_probe.py          # pytest plugin recording per-test outcomes for the fail-first run
 │   └── workflows/
 │       ├── ci.yml                # CI: make test + make lint on every PR
-│       ├── publish-public.yml    # Publishes the mirror to recension-hq/recension on v* tags or by hand
+│       ├── publish-public.yml    # Publishes the mirror to filiation-hq/filiation on v* tags or by hand
 │       ├── ingest.yml            # Weekly openFDA ingestion to R2 (Wed 07:00 UTC + manual), `ingestion` env (ADR-008/010)
 │       ├── tdd-guard.yml         # CI: TDD guard on every PR (AGENTS.md §9)
 │       └── pr-template.yml       # CI: fails PRs whose body breaks the template
 │
-├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout; raw/ mirrors the recension-raw R2 bucket keys (ADR-010)
+├── data/                         # [LOCAL ONLY, not in git] Three-tier data layout; raw/ mirrors the filiation-raw R2 bucket keys (ADR-010)
 │   ├── raw/                      # [GIT-IGNORED] Raw 510(k) PDFs & openFDA JSON
 │   ├── interim/                  # [GIT-IGNORED] Extracted OCR text & candidate regex matches
 │   └── derived/                  # Parquet/CSV edge lists & release datasets (<100 MB may be committed)
-│       └── releases/             # Output of `recension-pipeline export-derived`
+│       └── releases/             # Output of `filiation-pipeline export-derived`
 │
 ├── packages/                     # One installable package per ownership boundary (ADR-002)
-│   ├── core/                     # recension-core: shared data contracts and utilities
-│   │   ├── src/recension/core/
+│   ├── core/                     # filiation-core: shared data contracts and utilities
+│   │   ├── src/filiation/core/
 │   │   │   ├── schemas/          # Dataclass contracts (ADR-001): device_nodes, predicate_edges, recalls (incl. the recall label, ADR-017), run_manifest; DuckDB DDL strings
 │   │   │   ├── storage/          # raw_store.py: write-once RawStore, local (data/raw/) and R2 backends (ADR-010)
 │   │   │   ├── utils/            # hashing.py, paths.py (repo-root & data-tier resolution)
-│   │   │   └── data_loader.py    # Loads derived Parquet; `recension-data` entrypoint
+│   │   │   └── data_loader.py    # Loads derived Parquet; `filiation-data` entrypoint
 │   │   └── pyproject.toml        # [remote] extra adds boto3 for R2RawStore
 │   │
-│   ├── pipeline/                 # recension-pipeline: Data Engineering (Tesseract OCR, pdfplumber via the [pdf] extra (ADR-014); LLM fallback reserved, ADR-006)
-│   │   ├── src/recension/pipeline/
+│   ├── pipeline/                 # filiation-pipeline: Data Engineering (Tesseract OCR, pdfplumber via the [pdf] extra (ADR-014); LLM fallback reserved, ADR-006)
+│   │   ├── src/filiation/pipeline/
 │   │   │   ├── crawler/          # openFDA bulk-export ingester with zero-tolerance count reconciliation (ADR-015), ingestion check findings tied to bias-register factors, per-run field completeness and 510(k) date rules (ADR-016), weekly export diff with per-key change lists (ADR-018), ingestion run + manifest, API client, resumable CDRH PDF crawler, PDF backfill from the latest snapshot, stratified pilot sampler
 │   │   │   ├── ocr/              # Tesseract OCR engine & K-number OCR repair for pre-2003 scans
 │   │   │   ├── extraction/       # PDF text fallback chain, K-number regex, predicate vs. reference classifier
 │   │   │   ├── linkage/          # K-number normalization, trade-name resolution, recall linkage (one link per recall event, ADR-017), recall class join from enforcement, recall date resolution (ADR-013), weekly recall report (MAUDE planned)
-│   │   │   ├── cli.py            # `recension-pipeline` public commands: ingest-openfda | fetch-openfda | export-derived | status; adds cli_internal's commands when installed
+│   │   │   ├── cli.py            # `filiation-pipeline` public commands: ingest-openfda | fetch-openfda | export-derived | status; adds cli_internal's commands when installed
 │   │   │   ├── cli_common.py     # Run identity, SIGTERM handling, and options shared by both command modules
 │   │   │   └── cli_internal.py   # Internal commands, not in the public mirror: recall-report | sample-pilot | crawl-pdfs | extract
 │   │   └── pyproject.toml
 │   │
-│   └── models/                   # recension-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
-│       ├── src/recension/models/    # Package root only; subpackages below are (planned)
+│   └── models/                   # filiation-models: Data Science (survival analysis, risk scores); library per ADR-007 (Proposed)
+│       ├── src/filiation/models/    # Package root only; subpackages below are (planned)
 │       │   ├── loader/           # (planned) Ingests Parquet tables from data/derived/
 │       │   ├── features/         # (planned) Time-varying exposure matrices (immortal-time bias safe)
 │       │   ├── survival/         # (planned) Cox PH, product-code effects, ancestor score math
 │       │   ├── backtesting/      # (planned) Temporal out-of-time splits & calibration
-│       │   └── cli.py            # (planned) `recension-models train`, `recension-models evaluate`
+│       │   └── cli.py            # (planned) `filiation-models train`, `filiation-models evaluate`
 │       └── pyproject.toml
 │
 ├── notebooks/                    # Data Science research (title-cell placeholders; owner unassigned)
@@ -82,4 +82,4 @@ recension/
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
     ├── PUBLIC_MIRROR.md          # Runbook: public mirror setup, publishing, allowlist changes, outside PRs
     ├── bias-register.md          # Overfitting, leakage, and bias factors R01–R46: stage gate, owner, control, issue
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-018)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-019)

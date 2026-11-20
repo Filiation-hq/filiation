@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from recension.core.schemas.run_manifest import (
+from filiation.core.schemas.run_manifest import (
     LatestPointer,
     ManifestFinding,
     ManifestObject,
@@ -20,15 +20,15 @@ from recension.core.schemas.run_manifest import (
     changes_key,
     encode_changes,
 )
-from recension.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
-from recension.core.utils.hashing import compute_sha256
-from recension.pipeline.crawler.export_diff import (
+from filiation.core.storage.raw_store import LATEST_KEY, KeyExistsError, RawStore
+from filiation.core.utils.hashing import compute_sha256
+from filiation.pipeline.crawler.export_diff import (
     FALLBACK_KEYS,
     RECORD_KEYS,
     RecordDiff,
     diff_export_changes,
 )
-from recension.pipeline.crawler.openfda_bulk import (
+from filiation.pipeline.crawler.openfda_bulk import (
     ExportIntegrityError,
     ExportResult,
     Opener,

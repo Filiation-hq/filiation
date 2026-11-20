@@ -1,11 +1,11 @@
 name: Source correction
-description: Something Recension published disagrees with the FDA source document.
+description: Something Filiation published disagrees with the FDA source document.
 title: "Source correction: K"
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for checking our work against the source. Every link Recension publishes should trace to an FDA page, so a correction needs the K-number, the FDA document and page, and what that page says.
+        Thanks for checking our work against the source. Every link Filiation publishes should trace to an FDA page, so a correction needs the K-number, the FDA document and page, and what that page says.
 
         Please report what the document says, not a judgment about a device's safety. Don't include confidential client or submission details.
   - type: input
@@ -35,7 +35,7 @@ body:
   - type: textarea
     id: published
     attributes:
-      label: What Recension published
+      label: What Filiation published
       description: What we said, and where (a post, the README, a sample, a dataset field). A link or screenshot helps.
     validations:
       required: true

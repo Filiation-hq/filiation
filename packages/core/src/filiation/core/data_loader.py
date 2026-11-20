@@ -1,15 +1,15 @@
-"""Data loading and verification interface for Recension datasets."""
+"""Data loading and verification interface for Filiation datasets."""
 
 import json
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from recension.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
+from filiation.core.utils.paths import get_derived_dir, get_interim_dir, get_raw_dir
 
 
-class RecensionDataLoader:
-    """Manages access to Recension derived and raw datasets."""
+class FiliationDataLoader:
+    """Manages access to Filiation derived and raw datasets."""
 
     def __init__(self, repo_root: Path | None = None):
         self.raw_dir = get_raw_dir(repo_root)
@@ -59,9 +59,9 @@ class RecensionDataLoader:
 
 
 def main() -> None:
-    loader = RecensionDataLoader()
+    loader = FiliationDataLoader()
     stats = loader.summary()
-    print("=== Recension Data Store Summary ===")
+    print("=== Filiation Data Store Summary ===")
     print(json.dumps(stats, indent=2))
 
 

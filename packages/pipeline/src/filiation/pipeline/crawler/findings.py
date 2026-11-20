@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from recension.core.schemas.run_manifest import check_finding_fields
+from filiation.core.schemas.run_manifest import check_finding_fields
 
 
 @dataclass(frozen=True)

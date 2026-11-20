@@ -1,12 +1,12 @@
 cff-version: 1.2.0
-message: "If you use Recension, please cite the specific snapshot you used."
-title: "Recension: the FDA 510(k) predicate lineage graph"
+message: "If you use Filiation, please cite the specific snapshot you used."
+title: "Filiation: the FDA 510(k) predicate lineage graph"
 type: software
 authors:
   - family-names: Rocca
     given-names: Steven
 license: AGPL-3.0-only
-repository-code: "https://github.com/recension-hq/recension"
+repository-code: "https://github.com/filiation-hq/filiation"
 # Add once the first release is published on Zenodo (use the concept DOI):
 # doi: 10.5281/zenodo.XXXXXXX
 keywords:
