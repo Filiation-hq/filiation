@@ -1,11 +1,9 @@
 # Licensing
 
-Filiation is released under two licenses: one for the code and one for the data.
-
 | What | License | File |
 |---|---|---|
-| Source code, tests, notebooks and docs in this repository (everything outside `data/`) | GNU Affero General Public License v3.0 only (`AGPL-3.0-only`) | [`LICENSE`](LICENSE) |
-| Data files under `data/` and dataset releases: predicate edges, device nodes, recall linkage, accuracy reports and snapshot files, including copies published on Zenodo | Creative Commons Attribution-NonCommercial 4.0 International (`CC-BY-NC-4.0`) | [`LICENSE-DATA`](LICENSE-DATA) |
+| Filiation code, tests, notebooks and docs | GNU Affero General Public License v3.0 only (`AGPL-3.0-only`) | [LICENSE](LICENSE) |
+| Released datasets, to the extent Filiation holds rights in them | Creative Commons Attribution-NonCommercial 4.0 International (`CC-BY-NC-4.0`) | [LICENSE-DATA](LICENSE-DATA) |
 
 Copyright © 2026 Steven Rocca.
 
@@ -15,18 +13,16 @@ You can use, study, modify and share the code. If you distribute a modified vers
 
 ## Data (CC BY-NC 4.0)
 
-You can copy, share and adapt Filiation datasets for non-commercial purposes, including academic research, journalism, teaching and personal projects, as long as you credit Filiation and cite the snapshot you used.
+The license permits noncommercial copying, sharing and adaptation of the Filiation rights it covers, subject to its attribution and other terms. For a separate commercial license covering those Filiation rights, contact filiationhq@gmail.com. [CC BY-NC 4.0 legal code](https://creativecommons.org/licenses/by-nc/4.0/legalcode.en)
 
-Commercial use needs a separate license. This includes using the data in a paid product or service, in client work, or inside a company's internal tools. Contact filiationhq@gmail.com.
+openFDA data is generally available under CC0 unless otherwise noted. Facts and third-party filing text retain their applicable rights status. Under U.S. copyright law, facts themselves are outside copyright protection, and sufficiently original selection, coordination or arrangement may qualify for protection. [openFDA terms](https://open.fda.gov/terms/) · [U.S. Copyright Office database guidance](https://www.copyright.gov/non-photographic-databases/register-one.html)
+
+### Manual example and dataset release gate
+
+The K233783 example uses the FDA-hosted PDF locator, page and section citations, and a paraphrase of what the applicant reported. Use that approach by default. Fair use depends on the circumstances of the specific use. [U.S. Copyright Office Fair Use Index](https://www.copyright.gov/fair-use/)
+
+Before releasing a dataset, include a versioned license and provenance notice with the download that identifies sources and applicable terms. Omit verbatim manufacturer excerpts from bulk downloads pending rights review. Verify the actual dataset record and DOI before linking them.
 
 ### How to cite
 
-Cite the specific snapshot you used, by its version DOI, so your numbers can be reproduced exactly. To refer to Filiation in general, use the concept DOI, which always resolves to the latest release.
-
-> Rocca, S. (2026). *Filiation: the FDA 510(k) predicate lineage graph* (snapshot YYYY-MM-DD) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
-
-## What these licenses don't cover
-
-The licenses above cover what Filiation adds: extracted predicate links, role labels, confidence scores, recall linkage, accuracy measurements and the software. They don't cover FDA's own records or the 510(k) summary documents, which Filiation doesn't redistribute. Each extracted link includes only a short excerpt of the source text so it can be checked against the original.
-
-Nothing in Filiation's data is a finding about the safety of any device.
+Use [CITATION.cff](CITATION.cff) for the software. For a published dataset, cite the specific snapshot's version DOI so the analysis can be reproduced. Use the dataset's concept DOI for references to the dataset across versions. The software and dataset have distinct citation records.

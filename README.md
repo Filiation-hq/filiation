@@ -1,59 +1,54 @@
 # Filiation
 
-> **An open, versioned FDA 510(k) predicate graph with per-link source citations and confidence, plus an explainable recall-risk score.**
+Filiation is a project for tracing FDA 510(k) predicate lineage and checking what public filings report about testing for device changes.
 
-This is the **public mirror** of Filiation. Development happens in a private repository, and this one is generated from it **every Monday**, with tagged releases in between. Each update adds that week's commits on top, so `git pull` works. If the set of published files changes, though, this repository's history is rebuilt, and an existing clone has to be reset to the new `main`. Because it's generated, pull requests aren't merged here directly (see [Contributing](#contributing)).
+This [public mirror](https://github.com/filiation-hq/filiation) ships the openFDA ingestion CLI, its supporting data contracts and snapshot storage, and tests. Today you can fetch a small sample of 510(k) records or build local snapshots from the bulk exports. The [roadmap](docs/ROADMAP.md) describes the planned predicate graph and versioned dataset releases.
 
-## What's here
-
-| Path | What it is |
-|---|---|
-| `packages/core/` | Data contracts (predicate edges, device nodes, recalls, run manifests), the write-once raw snapshot store, and hashing and path utilities |
-| `packages/pipeline/` | openFDA bulk ingestion: downloads the 510(k), recall, and enforcement exports, stores each one write-once, diffs it against the previous snapshot, and records the run in a manifest. Also the `filiation-pipeline` CLI |
-| `packages/models/` | Placeholder for the recall-risk model package |
-| `docs/adrs/` | Architecture decision records: what was decided, and why |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | The stages from raw data to a public score and research platform, and what has to be true before each one ends |
-| `CONTEXT.md` | Domain glossary (510(k), predicate, recall class, availability date, and so on) |
-| `ARCHITECTURE.txt` | Map of the full project. It also lists modules that aren't published here |
-
-**Not in this repository:** PDF crawling, predicate extraction, OCR, recall linkage, and modeling. Their outputs are planned as versioned dataset releases on Zenodo. No dataset has been released yet.
+The mirror is scheduled to update every Monday from the private development repository. Changes to the set of published paths rebuild its history.
 
 ## Quickstart
 
-Requires Python 3.10+.
+Requires Python 3.10+, internet access to openFDA, and permission to write under the clone's `data/raw/` directory.
 
 ```bash
 git clone https://github.com/filiation-hq/filiation.git
 cd filiation
-make install-dev   # core, pipeline (with the pdf extra), models placeholder, pytest, ruff
-make test
-make lint
-
-# Store the current openFDA 510(k), recall, and enforcement exports write-once under data/raw/
-filiation-pipeline ingest-openfda
-
-# Or fetch a small API sample for ad-hoc work
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e packages/core -e packages/pipeline
 filiation-pipeline fetch-openfda --limit 100
-
-# Check local data store health
-filiation-pipeline status
 ```
+
+The command requests up to 100 510(k) clearance records and writes a JSON array to `data/raw/openfda/sample_510k.json`. It uses the public API without an API key or cloud credentials. A rerun replaces the sample file. Use `--output` to choose another writable path.
+
+### Optional bulk ingestion
+
+Run `filiation-pipeline ingest-openfda` to download the full 510(k), recall, and enforcement exports, store them under `data/raw/` by default, and record a run manifest. Allow disk space for the exports and retained snapshots. The 510(k) export alone can inflate to 1.6 GB, and a full 510(k) snapshot comparison has used about 1.3 GB peak RAM. See the [storage design](docs/adrs/ADR-010-raw-snapshot-storage.md) and [snapshot comparison notes](docs/adrs/ADR-021-cosmetic-changes-in-change-lists.md).
+
+## Manual evidence example
+
+In the FDA-hosted K233783 summary, applicant PECA Labs identifies [K221628 as the predicate](https://www.accessdata.fda.gov/cdrh_docs/pdf23/K233783.pdf#page=5) in Section VI.
+
+| Configuration | What the applicant reported | Source |
+|---|---|---|
+| Unchanged Carbon | The submission carried forward performance data from K221628 for these configurations. | [K233783, PDF page 5, Section VII](https://www.accessdata.fda.gov/cdrh_docs/pdf23/K233783.pdf#page=5) |
+| Non-Carbon | The applicant included additional performance data in the submission and its appendices. | [K233783, PDF page 5, Section VII](https://www.accessdata.fda.gov/cdrh_docs/pdf23/K233783.pdf#page=5). The test list continues on [PDF page 6](https://www.accessdata.fda.gov/cdrh_docs/pdf23/K233783.pdf#page=6). |
+
+Project example by Steven Rocca. Source checked November 20, 2026. This manual example applies to the configurations in this filing. Filiation is independent of the FDA.
 
 ## Licensing
 
-- **Code** is licensed under [AGPL-3.0-only](LICENSE).
-- **Data** is licensed under [CC BY-NC 4.0](LICENSE-DATA). It is free for research, journalism, teaching, and personal projects. Commercial use needs a separate license.
+- Code is licensed under [AGPL-3.0-only](LICENSE).
+- [CC BY-NC 4.0](LICENSE-DATA) applies to the extent Filiation holds rights in a released dataset. openFDA data is generally CC0 unless otherwise noted. Facts and third-party filing text retain their applicable rights status.
 
-[`LICENSING.md`](LICENSING.md) explains both licenses, what they don't cover, and how to get a commercial license.
+See [LICENSING.md](LICENSING.md) for source terms and separate commercial licensing of the Filiation rights covered.
 
 ## How to cite
 
-Use [`CITATION.cff`](CITATION.cff); GitHub's "Cite this repository" button reads it. For a dataset release, cite the version DOI of the snapshot you used, as described in [`LICENSING.md`](LICENSING.md#how-to-cite).
+Use [CITATION.cff](CITATION.cff) for the software. For a future dataset release, cite the version DOI of the snapshot you used. See the [dataset citation guidance](LICENSING.md#how-to-cite).
 
 ## Contributing
 
-Issues are welcome: bug reports, data problems you've spotted in openFDA, and questions. If something we published disagrees with an FDA document, use the **Source correction** issue form, with the K-number, the PDF page and what it says.
+Issues and source corrections are welcome. For a correction, use the [Source correction form](https://github.com/filiation-hq/filiation/issues/new?template=source-correction.yml). Please use only public K-numbers and FDA PDF page citations as evidence.
 
-Pull requests are welcome too. They are reviewed here, then applied to the private repository with credit to you, and arrive in this repository with the next release. Because Filiation may also be offered under commercial licenses, outside contributions need a signed contributor license agreement (CLA) before they can be applied. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-Nothing in Filiation is a finding about the safety of any device.
+External patches and contributed data requiring relicensing rights cannot be applied until Steven confirms the contributor agreement and signing process. See [CONTRIBUTING.md](CONTRIBUTING.md) for how eligible patches are applied and credited.
