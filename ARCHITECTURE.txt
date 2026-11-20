@@ -82,4 +82,4 @@ filiation/
     ├── TECH_STACK.md             # Verified tools by status (in use / unused / planned)
     ├── PUBLIC_MIRROR.md          # Runbook: public mirror setup, publishing, allowlist changes, outside PRs
     ├── bias-register.md          # Overfitting, leakage, and bias factors R01–R46: stage gate, owner, control, issue
-    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-019)
+    └── adrs/                     # ADR-NNN-*.md, one per major decision (ADR-001 – ADR-020)
